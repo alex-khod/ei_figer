@@ -30,6 +30,12 @@ class CBone(object):
         for _ in range(8):
             self.pos.append(parser.read('fff'))
         return 0
+
+    def read_bonvec(self, name, vec):
+        self.name = name
+        for _ in range(8):
+            self.pos.append(vec)
+        return 0
     
     def write_bon(self):
         raw_data = b''

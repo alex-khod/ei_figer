@@ -15,8 +15,8 @@
 
 bl_info = {
     'name': 'EI figer',
-    'author': 'konstvest',
-    'version': (5, 2),
+    'author': 'Konstvest/LostSoul/Asbest',
+    'version': (5, 5),
     'blender': (3, 0, 0),
     'location': '',
     'description': 'Addon for import/export models and animations from Evil Islands game to Blender',
@@ -34,17 +34,25 @@ from bpy.utils import unregister_class
 bl_panels = (
 IMPORT_EXPORT_PT_PANEL,
 OPERATOR_PT_PANEL,
+OPERATORMASS_PT_PANEL,
 ANIMATION_PT_PANEL
 )
 
 bl_operators = (
 CChooseResFile,
 CAddMorphComp_OP_Operator,
+CAddMorphCompNamed_OP_Operator,
+CAddAllMorphComp_OP_Operator,
+CAutoFillMorphNew_OP_Operator,
+CFixPos_OP_Operator,
+CAutoFillMorphScaledOnly_OP_Operator,
 CImport_OP_operator,
 CAnimation_OP_import,
 CAnimation_OP_Export,
 CExport_OP_operator,
-CAutoFillMorph_OP_Operator
+CAutoFillMorph_OP_Operator,
+CAnimation_OP_shapekey
+
 )
 
 def register():    

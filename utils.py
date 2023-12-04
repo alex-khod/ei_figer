@@ -21,7 +21,7 @@ class CByteReader:
     def __init__(self, raw_data):
         self._offset=0
         self._raw_data = raw_data
-        self._format_table = {'i':4,'f':4 ,'h':2, 's':1}
+        self._format_table = {'d':8, 'i':4,'f':4 ,'h':2, 's':1}
 
     def _sizeof(self, format_string):
         size = 0
@@ -48,46 +48,73 @@ class CByteReader:
         return self._raw_data
 
 class CItemGroup:
-    def __init__(self, type, mask, uv_convert_count, ei_group, t_number, c_count):
+    def __init__(self, type, mask, uv_convert_count, ei_group, t_number, c_count, uv_base=None):
         self.type : str = type
         self.mask = mask #regexpr
         self.uv_convert_count : int = uv_convert_count
         self.ei_group : int = ei_group
         self.t_number : int = t_number
         self.morph_component_count : int = c_count #{1 or 8} experimental for easy import\export for user
+        self.uv_base = uv_base or (0, 1)
 
 class CItemGroupContainer:
     def __init__(self):
         self.item_type : list[CItemGroup] = [
             #TODO: check from models
             CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 2, 19, 8, 1)
+            #CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 0, 19, 8, 1)
             ,CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 1, 18, 8, 1)
+            #,CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1)
             ,CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1)
             ,CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1)
-            ,CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1)
-            ,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 0, 19, 2, 8)
-            ,CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 0, 19, 2, 8)
-            ,CItemGroup('weapons', re.compile(r'(\.(pike|sword|dagger|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18, 2, 8)
-            ,CItemGroup('armor', re.compile(r'\.armor\d+'), 0, 19, 1, 8)
-            ,CItemGroup('unit', re.compile(r'un(an|mo|hu|or).+'), 0, 19, 1, 8)
+            ,CItemGroup('faces',            re.compile(r'infa[0-9]+'), 0, 22, 8, 1)
+            # ,CItemGroup('weapons',          re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18, 2, 8)
+            #,CItemGroup('weapons left', re.compile(r'(lh3\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0))
+            #,CItemGroup('weapons right',   re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0))
+            #,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
+            #,CItemGroup('shield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(0, 0))            
+
+            ,CItemGroup('arrows',   re.compile(r'quiver|arrow(s|00)'), 1, 19, 2, 8, uv_base=(0, 1))
+            ,CItemGroup('archery', re.compile(r'(\.(crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
+            ,CItemGroup('archery2', re.compile(r'(\.(crbow..part|bw..part\D+)|^crbow..part|^bw..part\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
+            ,CItemGroup('shield', re.compile(r'lh2\.axe\d+'), 1, 18, 2, 8, uv_base=(1, 1))
+            ,CItemGroup('exshield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(1, 1))
+            ,CItemGroup('weapons left', re.compile(r'(lh3\.(pike|sword|dagger|club|axe|shit1|shit2\D+)|^shit1|^shit2\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1))
+            ,CItemGroup('weapons',   re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
+            ,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
+
+            #,CItemGroup('weapons left', re.compile(r'((lh3.pike|lh3.sword|lh3.dagger|lh3.2axe|lh3.club|lh3.axe|lh3.crbow|bw\D+)|^lh3.crbow|^lh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1))
+            #,CItemGroup('weapons',   re.compile(r'((rh3.pike|rh3.sword|rh3.dagger|rh3.2axe|rh3.club|rh3.axe|rh3.crbow|rh3.bw\D+)|^rh3.crbow|^rh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
+            #,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
+            #,CItemGroup('shield', re.compile(r'lh2.shield\d+'), 1, 18, 2, 8, uv_base=(1, 0))
+
+            ,CItemGroup('armor',            re.compile(r'\.armor\d+'), 0, 19, 1, 8)
+            ,CItemGroup('unit',             re.compile(r'un(an|mo|hu|or).+'), 0, 19, 1, 8)
 
             ,CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8) #LAST
             ]
     
-    def get_item_group(self, obj_name : str):
+    def get_item_group(self, obj_name: str):
         for item in self.item_type:
             if item.mask.search(obj_name) is not None:
+                print("FOUND", obj_name)    
                 return item
+        print("NOT FOUND", obj_name)    
         #assert!!!!
         return None
 
 
-def get_uv_convert_count(name : str):
+def get_uv_convert_count(name: str):
     '''
     gets count of convert uv coordinates depending on filename
     '''
     container = CItemGroupContainer()
     return container.get_item_group(name).uv_convert_count
+
+def get_uv_params(name: str):
+    container = CItemGroupContainer()
+    group = container.get_item_group(name)
+    return group.uv_convert_count, group.uv_base
 
 def sumVector(vec1, vec2):
     if len(vec1) != len(vec2):
@@ -113,23 +140,29 @@ def mulVector(vec1, scalar): #multiply vector with scalar
         result.append(vec1[i] * scalar)
     return result
 
-def unpack_uv(uv_, count):
+def unpack_uv(uv_, count, uv_base=None):
     '''
     increases x,y value 2 times per side and offset by y(vertically)
     '''
+    uv_base = uv_base or (0, 1)
     for _ in range(count):
         for uv_convert in uv_:
-            uv_convert[0] *= 2
-            uv_convert[1] = uv_convert[1] * 2 - 1
+            uv_convert[0] = uv_convert[0] * 2 - uv_base[0]
+            uv_convert[1] = uv_convert[1] * 2 - uv_base[1]
+            #uv_convert[0] = uv_convert[0]
+            #uv_convert[1] = uv_convert[1]
 
-def pack_uv(uv_, count):
+
+def pack_uv(uv_, count, uv_base=None):
     '''
     decreases x,y value 2 times per side and offset by y(vertically)
     '''
+    uv_base = uv_base or (0, 1)
     for _ in range(count):
         for uv_convert in uv_:
-            uv_convert[0] /= 2
-            uv_convert[1] = 0.5 + uv_convert[1] / 2
+            uv_convert[0] = uv_base[0]/2 + uv_convert[0]/2
+            uv_convert[1] = uv_base[1]/2 + uv_convert[1]/2
+    
 
 def calculate_unique_component(ei_, comp):
     '''

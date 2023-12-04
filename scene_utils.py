@@ -40,6 +40,9 @@ def read_links(lnk_res : ResFile, lnk_name : str):
         err += lnk.read_lnk(data)
         active_model.links = lnk
     return err
+from . utils import CByteReader, unpack_uv, pack_uv, pack, unpack, \
+    read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, \
+    get_uv_convert_count
 
 def read_figure(fig_res : ResFile, fig_name : str):
     active_model : CModel = bpy.types.Scene.model
@@ -49,7 +52,29 @@ def read_figure(fig_res : ResFile, fig_name : str):
         fig = CFigure()
         err += fig.read_fig(fig_name, data)
         active_model.mesh_list.append(fig)
+        #bon = CBone()
+        #err += bon.read_bonvec(fig_name, [1,1,1])
+        #active_model.pos_list.append(bon)
+        #bpy.context.scene.cursor.location = (1,1,1)
+        #bpy.context.scene.tool_settings.transform_pivot_point
     return err
+    
+def read_figSignature(resFile : ResFile, model_name):
+    with resFile.open(model_name + '.mod') as meshes_container:
+        mesh_list_res = ResFile(meshes_container)
+        for fig_name in mesh_list_res.get_filename_list():
+            active_model : CModel = bpy.types.Scene.model
+            print(' fig_name for signature: ' + fig_name)
+            with fig_res.open(fig_name) as fig_res:
+                data = fig_res.read()
+                fig = CFigure()
+            
+                parser = CByteReader(data)
+                signature = parser.read('ssss').decode()
+                if signature == 'FIG8':
+                    return 8
+                else:
+                    return 1
 
 def read_bone(bon_res : ResFile, bon_name : str):
     active_model : CModel = bpy.types.Scene.model
@@ -221,12 +246,18 @@ def create_mesh_2(figure:CFigure):
     
     container = CItemGroupContainer()
     item_group = container.get_item_group(active_model.name)
-    mesh_count = item_group.morph_component_count
+    bEtherlord = bpy.context.scene.ether
+    if not bEtherlord:
+        mesh_count = item_group.morph_component_count
+    else:
+        mesh_count = 1
     for mesh_num in range(mesh_count):
+#    for mesh_num in range(1):
         name = active_model.morph_comp[mesh_num] + figure.name
         base_mesh = bpy.data.meshes.new(name=name)
         base_obj = bpy.data.objects.new(name, base_mesh)
         collection_name = active_model.morph_collection[mesh_num]
+#        print('name = ' + name)
         if collection_name in bpy.data.collections:
             collection = bpy.data.collections[collection_name]
         else:
@@ -244,7 +275,7 @@ def create_mesh_2(figure:CFigure):
                 base_mesh.uv_layers[0].data[uv_ind].uv[xy] = \
                         figure.t_coords[figure.v_c[figure.indicies[uv_ind]][1]][xy]
         base_mesh.update()
-
+    
 def set_pos_2(bone : CBone):
     active_model : CModel = bpy.context.scene.model
     container = CItemGroupContainer()
@@ -317,9 +348,15 @@ def insert_animation(anm_list : list[CAnimation]):
             obj.rotation_quaternion = part.rotations[frame]
             obj.keyframe_insert(data_path='rotation_quaternion', index=-1)
             #positions
-            if obj.parent is None: #root
+            bEtherlord = bpy.context.scene.ether
+            if not bEtherlord:
+                if obj.parent is None: #root
+                    obj.location = part.translations[frame]
+                    obj.keyframe_insert(data_path='location', index=-1)
+            else:
                 obj.location = part.translations[frame]
                 obj.keyframe_insert(data_path='location', index=-1)
+            
             #morphations
         if len(part.morphations) > 0:
             obj.shape_key_add(name='basis', from_mix=False)
@@ -349,9 +386,14 @@ def collect_animations():
             bpy.context.scene.frame_set(frame) #choose frame
             anm.rotations.append(Quaternion(obj.rotation_quaternion))
             #positions
-            if obj.parent is None: #root
+            bEtherlord = bpy.context.scene.ether
+            if not bEtherlord:
+                print('object ' + anm.name + ' loc is ' + str(obj.location))
+                if obj.parent is None: #root
+                    anm.translations.append(obj.location.copy())
+            else:
                 anm.translations.append(obj.location.copy())
-            
+
             #morphations
             if not obj.data.shape_keys:
                 continue
@@ -394,7 +436,9 @@ def is_model_correct():
 
     if collections[0].name != model().morph_collection[0]:
         print('invalid scene name, must be \"' + model().morph_collection[0] + '\"')
+    bEtherlord = bpy.context.scene.ether
 
+    #if len(collections) != obj_count and not bEtherlord:
     if len(collections) != obj_count:
         print('collection number must correspond Model type count (now: '+ str(obj_count) +')')
         return False
@@ -475,7 +519,7 @@ def collect_pos():
     err = 0
     obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
     collections = bpy.context.scene.collection.children
-
+    #model().pos_list.clear()
     for obj in collections[0].objects:
         if obj.type != 'MESH':
             continue
@@ -484,8 +528,10 @@ def collect_pos():
             #TODO: if object has no this morph comp, use previous components (end-point: base)
             morph_obj = collections[i].objects[model().morph_comp[i] + obj.name]
             bone.pos.append(morph_obj.location[:])
-        
+            #print(str(obj.name) + '.bonename, objcount' + str(obj_count) + ' loc ' + str(morph_obj.location[:]))
+       
         bone.name = obj.name
+
         if obj_count == 1:
             bone.fillPositions()
 
@@ -498,7 +544,7 @@ def collect_mesh():
     obj_count = item.morph_component_count
     collections = bpy.context.scene.collection.children
 
-    individual_group=['helms', 'second layer', 'arrows', 'weapons', 'armor']
+    individual_group=['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left', 'weapons', 'armor']
 
     for obj in collections[0].objects:
         if obj.type != 'MESH':
@@ -772,10 +818,82 @@ def auto_fix_scene():
         obj.select_set(False)
 
     for obj in bpy.data.objects:
-        # apply transformations
+        # выделяем все объекты
         obj.select_set(True)
-        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-        triangulate(obj)
+        # применяем модификаторы
+        for sel in bpy.context.selected_objects:
+            bpy.context.view_layer.objects.active = sel
+            for modifier in sel.modifiers:
+                #if modifier.type == 'SUBSURF':
+                bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+                # apply transformations
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+                triangulate(sel)
 
     # copy empty components
     pass
+    
+def animation_to_shapekey(context):
+    # first and second selected objects are donor & acceptor
+    donor = context.selected_objects[0]
+    acceptor = context.selected_objects[1]
+    armature = context.selected_objects[0]
+
+    bAutofix = bpy.context.scene.skeletal
+    if not bAutofix:
+        base_key = acceptor.shape_key_add(name='basis', from_mix=False)
+    # huh
+    # for i, vertex in enumerate(donor.data.vertices):
+    #     base_key.data[i].co = vertex.co
+
+    # for animating verts
+    depgraph = context.evaluated_depsgraph_get()
+
+    for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
+        context.scene.frame_set(frame)
+        if not bAutofix:
+
+            # animate vertices
+            donor_bm = bmesh.new()
+            donor_bm.verts.ensure_lookup_table()
+            donor_bm.from_object(donor, depgraph)
+
+            # copy verts from donor to acceptor
+            new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
+            for i, vertex in enumerate(donor_bm.verts):
+                new_key.data[i].co = vertex.co
+            #bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
+            insert_keyframe(new_key, frame)
+        
+        if bAutofix:
+            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
+            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]*2-0.385398-0.16
+
+    #        acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
+    #        acceptor.rotation_euler[1] = armature.rotation_euler[0]
+    #        acceptor.rotation_euler[2] = armature.rotation_euler[2]+1.570796
+            acceptor.rotation_euler[0] = armature.rotation_euler[0]
+            acceptor.rotation_euler[1] = armature.rotation_euler[1]
+            acceptor.rotation_euler[2] = armature.rotation_euler[2]
+
+            #acceptor.rotation_euler[2] = armature.rotation_euler[2]-1.570796-1.570796
+            acceptor.keyframe_insert(data_path='rotation_euler', index=-1)
+
+            #acceptor.location[0] = armature.location[0]/100+0.028571
+
+    #        acceptor.location[0] = armature.location[0]+2.8571/100
+    #        acceptor.location[1] = armature.location[1]
+    #        acceptor.location[2] = (armature.location[2]/100+ (0.08+8)/100)
+            acceptor.location[0] = armature.location[0]
+            acceptor.location[1] = armature.location[1]
+            acceptor.location[2] = armature.location[2]
+            
+            acceptor.keyframe_insert(data_path='location', index=-1)
+            
+            #acceptor.scale = donor.scale*100
+            #acceptor.scale = [1,1,1]
+            acceptor.scale = donor.scale
+            
+            #acceptor.transform_apply(location=False, rotation=False, scale=True)
+            acceptor.keyframe_insert(data_path='scale', index=-1)

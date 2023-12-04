@@ -13,8 +13,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from . utils import CByteReader, unpack_uv, pack_uv, pack, unpack, \
-    read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, \
-    get_uv_convert_count
+    read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, get_uv_params
+from . bone import CBone
 
 class CFigure(object):
     '''
@@ -63,29 +63,58 @@ class CFigure(object):
 
         return is_equal
 
+
+
     def read_fig(self, name, raw_data : bytearray):
         self.name = name
         parser = CByteReader(raw_data)
-        signature = parser.read('ssss').decode()
-        if signature != 'FIG8':
-            print(self.name + ' has unknown figure signature: ' + signature)
-            return 2
+        print(' Name: ' + name)
 
+        signature = parser.read('ssss').decode()
+#        signature = parser.read('i')
+        print('signature is ' + str(signature))
+        #if signature != 'FIG8':
+        #    print(self.name + ' has unknown figure signature: ' + signature)
+        #    return 2
+        if signature == 'FIG8':           ##LostSoul
+            self.morph_count = 8
+        elif signature == 'FIG6':
+            self.morph_count = 6
+        elif signature == 'FIG4':
+            self.morph_count = 4
+        else:    
+            self.morph_count = 1
         # header
+        print('morph_count is ' + str(self.morph_count))
+        
         for i in range(9):
             self.header[i] = parser.read('i')
+#            print('self.header[i] is ' + str(self.header[i]))
         # Center
         for _ in range(self.morph_count):
-            self.center.append(parser.read('fff'))
+            Center = self.center.append(parser.read('fff'))
+
+
+        #data = bon_res.read()
+#        bon = CBone()
+        #bon.read_bon(bon_name, data)
+        #active_model.pos_list.append(bon)
+#        bon.read_bonvec(name + '.bon', Center)
+#        self.pos_list.append(bon)
+
+#        print('self.center is ' + str(self.center))
         # MIN
         for _ in range(self.morph_count):
             self.fmin.append(parser.read('fff'))
+#        print('self.fmin is ' + str(self.fmin))
         # MAX
         for _ in range(self.morph_count):
             self.fmax.append(parser.read('fff'))
+#        print('self.fmax is ' + str(self.fmax))
         # Radius
         for _ in range(self.morph_count):
             self.radius.append(parser.read('f'))
+#        print('self.radius is ' + str(self.radius))
         # VERTICES
         block = [[[0 for _ in range(3)] for _ in range(8)] for _ in range(4)]
         for _ in range(self.header[0]):
@@ -93,6 +122,7 @@ class CFigure(object):
                 for i in range(self.morph_count):  #morphing component
                     for cur_block in range(4):  #block with 4 verts
                         block[cur_block][i][xyz] = parser.read('f')
+#                            block[cur_block][i][xyz] = parser.read('h')
             #convert verts from block 4*n to 1-row data
             for cur_block in range(4):
                 for i in range(self.morph_count):
@@ -103,9 +133,9 @@ class CFigure(object):
             self.normals.append(parser.read('ffff'))
         # TEXTURE COORDS
         for _ in range(self.header[2]):
-            t_coord = parser.read('ff')
+            t_coord = parser.read('ff')            
             self.t_coords.append(list(t_coord))
-        unpack_uv(self.t_coords, get_uv_convert_count(self.name))
+        unpack_uv(self.t_coords, *get_uv_params(self.name))
         # INDICES
         for _ in range(self.header[3]):
             self.indicies.append(parser.read('h'))
@@ -116,10 +146,15 @@ class CFigure(object):
         # MORHING COMPONENTS
         for _ in range(self.header[5]):
             self.m_c.append(parser.read('hh'))
+
         
         if parser.is_EOF():
-            #print('EOF reached')
+            print('EOF reached')
             return 0
+#        something = parser.read('i')
+#        print('name = ' + name)
+#        print('trans_count = ' + str(trans_count))
+#        print('something = ' + str(something))           
         return 1
 
     def write_fig(self):
@@ -167,7 +202,7 @@ class CFigure(object):
                         raw_data += pack('f', self.normals[block_index + cur_block_ind][xyzw])
             block_index += 4
         # texture coordinates
-        pack_uv(self.t_coords, get_uv_convert_count(self.name))
+        pack_uv(self.t_coords, *get_uv_params(self.name))
         
         for vec in self.t_coords:
             raw_data += pack('%sf' % len(vec), *vec)
@@ -227,7 +262,7 @@ class CFigure(object):
             for _ in range(self.header[2]):
                 t_coord = read_xy(fig_file)
                 self.t_coords.append(list(t_coord))
-            unpack_uv(self.t_coords, get_uv_convert_count(self.name))
+            unpack_uv(self.t_coords, *get_uv_params(self.name))
             # INDICES
             for _ in range(self.header[3]):
                 self.indicies.append(read_x(fig_file))
@@ -279,7 +314,7 @@ class CFigure(object):
             for i in range(self.header[1]*4): #normal count * block_size(4)
                 write_xyzw(fig_file, self.normals[i])
             # texture coordinates
-            pack_uv(self.t_coords, get_uv_convert_count(self.name))
+            pack_uv(self.t_coords, *get_uv_params(self.name))
             for tex_ind in range(self.header[2]):
                 write_xy(fig_file, self.t_coords[tex_ind])
             # indicies

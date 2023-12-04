@@ -1,4 +1,5 @@
 # Copyright (c) 2022 konstvest
+import importlib
 
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -16,6 +17,7 @@ import bpy
 import os
 import io
 from bpy_extras.io_utils import ImportHelper
+from . import scene_utils
 from . figure import CFigure
 from . bone import CBone
 from . links import CLink
@@ -85,6 +87,272 @@ class CAddMorphComp_OP_Operator(bpy.types.Operator):
     bl_description = 'Copy selected objects as morphing component'
 
     def execute(self, context):
+        #prefix = bpy.context.scene.morph_comp
+    
+        def addMorphComp(prefix):
+                
+                  
+            links = dict()
+            childs = dict()
+            clear_unlinked_data()
+            scene = bpy.context.scene
+            def get_true_name(name : str):
+                return name[2:] if name[0:2] in model().morph_comp.values() else name
+
+            col_num = list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]
+            if col_num > 0:
+                previous_col_name = model().morph_collection[col_num-1]
+                if previous_col_name not in scene.collection.children:
+                    self.report({'ERROR'}, 'Previous collection \"'+ previous_col_name +'\" does not exist')
+                    return {'CANCELLED'}
+            
+
+            bExist = False
+            collections = bpy.context.scene.collection.children
+            for obj in bpy.context.selected_objects:
+
+
+                # save links
+                #if obj in bpy.data.objects:
+                 
+                
+                
+                
+                for objs in bpy.context.scene.collection.children['base'].objects:
+                    if objs.parent is None:
+                        links[prefix + get_true_name(objs.name)] = None
+                    else:
+                        links[prefix + get_true_name(objs.name)] = (prefix + get_true_name(objs.parent.name))
+                
+#                if obj.child is None:
+#                    childs[prefix + true_name] = None
+#                else:
+#                    childs[prefix + true_name] = (prefix + get_true_name(obj.parent.name))
+
+                #Сохраняем чайлдов у объекта
+                #coll_name = model().morph_collection[col_num]
+                #for obj in collections[col_num].objects:
+                #    if obj.parent is (prefix + true_name):
+                #        childs.add(obj.name)
+                #        print(prefix + true_name + ' have child ' + obj.name)
+
+                #Заменяем или ругаемся про существующий объект в целевой коллекции
+                true_name = get_true_name(obj.name)
+                if (prefix + true_name) in bpy.data.objects:
+                    bReplace = bpy.context.scene.auto_replace
+                    if not bReplace:
+                        print(obj.name + ' already have this morph comp')
+                        bExist = True
+                        continue
+                    else:
+                       bpy.data.objects.remove(bpy.data.objects[prefix + true_name]) 
+                   
+
+                #coll = scene.collection.children[coll_name]
+                #del_name = obj.name
+                ##if (model().morph_comp[col_num] + obj.name) in coll.objects:
+                #self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
+                #bpy.data.objects.remove(bpy.data.objects[del_name])
+
+
+
+                
+
+                # create copy of object
+                new_obj = obj.copy()
+                new_obj.name = prefix + true_name
+                new_obj.data = obj.data.copy()
+                new_obj.data.name = new_obj.name
+                
+                coll_name = model().morph_collection[list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]]
+                if coll_name not in scene.collection.children:
+                    new_col = bpy.data.collections.new(coll_name)
+                    scene.collection.children.link(new_col)
+                coll = scene.collection.children[coll_name]
+                coll.objects.link(new_obj)
+                new_obj.select_set(False)
+            
+            if not links:
+                self.report({'ERROR'}, 'Object(s) already have these morph components' if bExist else 'Empty objects to copy. Please select objects')
+                return {'CANCELLED'}
+
+            for child, parent in links.items():
+                if parent is None:
+                    continue
+                bpy.data.objects[child].parent = bpy.data.objects[parent]
+#            for child, parent in childs.items():
+#                if child is None:
+#                    continue
+#                bpy.data.objects[parent].child = bpy.data.objects[child]
+
+        if bpy.context.scene.morph1:
+            addMorphComp('s~')
+        if bpy.context.scene.morph2:
+            addMorphComp('d~')
+        if bpy.context.scene.morph3:
+            addMorphComp('u~')
+        if bpy.context.scene.morph4:
+            addMorphComp('b~')
+        if bpy.context.scene.morph5:
+            addMorphComp('p~')
+        if bpy.context.scene.morph6:
+            addMorphComp('g~')
+        if bpy.context.scene.morph7:
+            addMorphComp('c~')
+
+
+        
+        self.report({'INFO'}, 'Done')
+        return {'FINISHED'}
+
+
+
+class CAddMorphCompNamed_OP_Operator(bpy.types.Operator):
+    bl_label = 'EI Add named Morphing Components'
+    bl_idname = 'object.addmorphcompnamed'
+    bl_description = 'Copy selected objects as morphing component with slected name'
+
+    def execute(self, context):
+        #prefix = bpy.context.scene.morph_comp
+    
+        def addMorphComp(prefix):
+                
+                  
+            links = dict()
+            childs = dict()
+            clear_unlinked_data()
+            scene = bpy.context.scene
+            
+            
+            newname = scene.figcopy_name
+            newparent = scene.figcopy_parent
+            
+            
+            def get_true_name(name : str):
+                return name[2:] if name[0:2] in model().morph_comp.values() else name
+
+            col_num = list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]
+            if col_num > 0:
+                previous_col_name = model().morph_collection[col_num-1]
+                if previous_col_name not in scene.collection.children:
+                    self.report({'ERROR'}, 'Previous collection \"'+ previous_col_name +'\" does not exist')
+                    return {'CANCELLED'}
+            
+
+            bExist = False
+            collections = bpy.context.scene.collection.children
+            for obj in bpy.context.selected_objects:
+
+
+                # save links
+                #if obj in bpy.data.objects:
+                 
+                
+                
+                
+                for objs in collections['base'].objects:
+                    if objs.parent is None:
+                        links[prefix + get_true_name(objs.name)] = None
+                    else:
+                        links[prefix + get_true_name(objs.name)] = (prefix + get_true_name(objs.parent.name))
+                
+#                if obj.child is None:
+#                    childs[prefix + true_name] = None
+#                else:
+#                    childs[prefix + true_name] = (prefix + get_true_name(obj.parent.name))
+
+                #Сохраняем чайлдов у объекта
+                #coll_name = model().morph_collection[col_num]
+                #for obj in collections[col_num].objects:
+                #    if obj.parent is (prefix + true_name):
+                #        childs.add(obj.name)
+                #        print(prefix + true_name + ' have child ' + obj.name)
+
+                #Заменяем или ругаемся про существующий объект в целевой коллекции
+                true_name = get_true_name(obj.name)
+                true_namenew = get_true_name(newname)
+                #if (prefix + true_name) in bpy.data.objects:
+                if (prefix + true_namenew) in bpy.data.objects:
+                    bReplace = bpy.context.scene.auto_replace
+                    if not bReplace:
+                        print(obj.name + ' already have this morph comp')
+                        bExist = True
+                        continue
+                    else:
+                       bpy.data.objects.remove(bpy.data.objects[prefix + true_namenew]) 
+                   
+
+                #coll = scene.collection.children[coll_name]
+                #del_name = obj.name
+                ##if (model().morph_comp[col_num] + obj.name) in coll.objects:
+                #self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
+                #bpy.data.objects.remove(bpy.data.objects[del_name])
+
+
+
+                
+                
+                # create copy of object
+                new_obj = obj.copy()
+                #new_obj.name = prefix + true_name
+                new_obj.name = prefix + newname
+                new_obj.data = obj.data.copy()
+                new_obj.data.name = new_obj.name
+                
+
+                for parents in bpy.data.objects:
+                    #self.report({'INFO'}, str(get_true_name(parents.name)) + newparent)
+                    for obj in bpy.context.selected_objects:
+                        #self.report({'INFO'}, prefix + (get_true_name(parents.name)) )
+                        if (str(get_true_name(parents.name))) == newparent:
+                            self.report({'INFO'}, newparent)
+                            resu = bpy.data.objects[(prefix + get_true_name(parents.name))]
+                            bpy.data.objects[new_obj.name].parent = resu
+
+
+                coll_name = model().morph_collection[list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]]
+                if coll_name not in scene.collection.children:
+                    new_col = bpy.data.collections.new(coll_name)
+                    scene.collection.children.link(new_col)
+                coll = scene.collection.children[coll_name]
+                coll.objects.link(new_obj)
+                new_obj.select_set(False)
+            
+            if not links:
+                self.report({'ERROR'}, 'Object(s) already have these morph components' if bExist else 'Empty objects to copy. Please select objects')
+                return {'CANCELLED'}
+
+#            for child, parent in childs.items():
+#                if child is None:
+#                    continue
+#                bpy.data.objects[parent].child = bpy.data.objects[child]
+
+        if bpy.context.scene.morph1:
+            addMorphComp('s~')
+        if bpy.context.scene.morph2:
+            addMorphComp('d~')
+        if bpy.context.scene.morph3:
+            addMorphComp('u~')
+        if bpy.context.scene.morph4:
+            addMorphComp('b~')
+        if bpy.context.scene.morph5:
+            addMorphComp('p~')
+        if bpy.context.scene.morph6:
+            addMorphComp('g~')
+        if bpy.context.scene.morph7:
+            addMorphComp('c~')
+
+        
+        self.report({'INFO'}, 'Done')
+        return {'FINISHED'}
+
+
+class CAddAllMorphComp_OP_Operator(bpy.types.Operator):
+    bl_label = 'EI Add Morphing Components'
+    bl_idname = 'object.addallmorphcomp'
+    bl_description = 'Copy selected objects as morphing component'
+
+    def execute(self, context):
         prefix = bpy.context.scene.morph_comp
         links = dict()
         clear_unlinked_data()
@@ -138,6 +406,9 @@ class CAddMorphComp_OP_Operator(bpy.types.Operator):
         
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
+
+
+
 
 class CAutoFillMorph_OP_Operator(bpy.types.Operator):
     bl_label = 'AutoMorphing'
@@ -200,6 +471,252 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
 
         return {'FINISHED'}
 
+class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
+    bl_label = 'AutoMorphing'
+    bl_idname = 'object.automorphnew'
+    bl_description = 'Generates morph components based on existing -base- collection'
+
+    def execute(self, context):
+        collections = bpy.context.scene.collection.children
+        if len(collections) < 0:
+            self.report({'ERROR'}, 'Scene empty')
+            return {'CANCELLED'}
+        if collections[0].name != model().morph_collection[0]:
+            self.report({'ERROR'}, 'Base collection must be named as \"base\"')
+            return {'CANCELLED'}
+
+        model().name = bpy.context.scene.figmodel_name
+        if not model().name:
+            self.report({'ERROR'}, 'Model name is empty')
+            return {'CANCELLED'}
+        
+        item = CItemGroupContainer().get_item_group(model().name)
+        obj_count = item.morph_component_count
+        if obj_count == 1:
+            self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
+            return {'CANCELLED'}
+        
+        clear_unlinked_data()
+        scene = bpy.context.scene
+        links = dict()
+        # Триангулируем и применяем модификаторы на базовой модели
+        bAutofix = bpy.context.scene.auto_apply
+        if bAutofix:
+            auto_fix_scene()
+
+        scn = scene
+        scaled = scn.scaled
+        # удаляем старые модели
+        for obj in collections[0].objects:
+            if obj.type != 'MESH':
+                continue
+            for i in range(1, 8):
+                if len(collections) == 1:
+                    continue
+                coll_name = model().morph_collection[i]
+                for obj in collections[i].objects:
+                    if obj.type != 'MESH':
+                        continue
+                    coll = scene.collection.children[coll_name]
+                    del_name = obj.name
+                    #if (model().morph_comp[i] + obj.name) in coll.objects:
+                    self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
+                    bpy.data.objects.remove(bpy.data.objects[del_name])
+
+
+        for obj in collections[0].objects:
+            if obj.type != 'MESH':
+                continue
+            links[obj.name] = None if obj.parent is None else obj.parent.name
+        # добавляем коллекции
+            for i in range(1, 8):
+                coll_name = model().morph_collection[i]
+                if coll_name not in scene.collection.children:
+                    new_col = bpy.data.collections.new(coll_name)
+                    scene.collection.children.link(new_col)
+
+                coll = scene.collection.children[coll_name]
+                morph_name = model().morph_comp[i]
+                if morph_name in coll.objects:
+                    continue
+        # копируем меши
+                #detect suitable obj
+                new_obj = obj.copy()
+                new_obj.name = model().morph_comp[i] + obj.name
+                new_obj.data = obj.data.copy()
+                new_obj.data.name = new_obj.name
+                coll.objects.link(new_obj)
+                new_obj.select_set(False)
+        # привязываем родителей
+        for c in range(1, 8):
+            for obj in collections[c].objects:
+                for child, parent in links.items():
+                    if parent is None:
+                        continue
+                    bpy.data.objects[model().morph_comp[c] + child].parent = bpy.data.objects[model().morph_comp[c] + parent]
+        for obj in bpy.context.selected_objects:
+            obj.select_set(False)
+        #Трогаем только scaled коллекции
+        for s in range(1, 8):
+            for obj in collections[s].objects:
+                for child, parent in links.items():
+                    if parent is None:
+                        if s == 1:
+                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.s_s_x, scn.s_s_y, scn.s_s_z)
+                        if s == 2:
+                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.s_d_x, scn.s_d_y, scn.s_d_z)
+                        if s == 3:
+                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.s_u_x, scn.s_u_y, scn.s_u_z)
+                        if s == 4:
+                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.scaled, scn.scaled, scn.scaled)
+                        if s == 5:
+                            bpy.data.objects[model().morph_comp[s] + child].scale = (scaled+scn.s_s_x-1, scaled+scn.s_s_y-1, scaled+scn.s_s_z-1)
+                        if s == 6:
+                            bpy.data.objects[model().morph_comp[s] + child].scale = (scaled+scn.s_d_x-1, scaled+scn.s_d_y-1, scaled+scn.s_d_z-1)
+                        if s == 7:
+                            bpy.data.objects[model().morph_comp[s] + child].scale = (scaled+scn.s_u_x-1, scaled+scn.s_u_y-1, scaled+scn.s_u_z-1)
+                        
+                        
+        for obj in bpy.context.selected_objects:
+            obj.select_set(False)
+        for obj in bpy.data.objects:
+        # Применяем все трансформации
+            obj.select_set(True)
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+        #for obj in bpy.context.selected_objects:
+            obj.select_set(False)
+
+        return {'FINISHED'}
+
+
+class CFixPos_OP_Operator(bpy.types.Operator):
+    bl_label = 'FixPos'
+    bl_idname = 'object.fixpos'
+    bl_description = 'Generates morph components based on existing -base- collection'
+
+    def execute(self, context):
+
+        selected_obs = context.selected_objects
+        ob_a = context.object
+        mwi = ob_a.matrix_world.inverted()
+        for ob_b in selected_obs:
+            #local_pos = mwi * ob_b.matrix_world.translation
+            local_pos = mwi @ ob_b.matrix_world.Identity(4).translation
+            #local_pos = mwi @ ob_b.location
+            #local_pos = mwi @ ob_b.matrix_world.Identity(4).location
+            print(ob_b.name, local_pos)
+                
+        self.report({'INFO'}, 'Done')
+        return {'FINISHED'}
+
+
+class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
+    bl_label = 'CopyToScaled'
+    bl_idname = 'object.copytoscaled'
+    bl_description = 'Generates SCALED morph components based on existing 4 base/str/dex/unic'
+
+    def execute(self, context):
+        collections = bpy.context.scene.collection.children
+        if len(collections) < 0:
+            self.report({'ERROR'}, 'Scene empty')
+            return {'CANCELLED'}
+        if collections[0].name != model().morph_collection[0]:
+            self.report({'ERROR'}, 'Base collection must be named as \"base\"')
+            return {'CANCELLED'}
+
+        model().name = bpy.context.scene.figmodel_name
+        if not model().name:
+            self.report({'ERROR'}, 'Model name is empty')
+            return {'CANCELLED'}
+        
+        item = CItemGroupContainer().get_item_group(model().name)
+        obj_count = item.morph_component_count
+        if obj_count == 1:
+            self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
+            return {'CANCELLED'}
+        def get_true_name(name : str):
+            return name[2:] if name[0:2] in model().morph_comp.values() else name
+        
+        clear_unlinked_data()
+        scene = bpy.context.scene
+        links = dict()
+        # Триангулируем и применяем модификаторы на базовой модели
+        bAutofix = bpy.context.scene.auto_apply
+        if bAutofix:
+            auto_fix_scene()
+
+        scn = scene
+        scaled = scn.scaled
+        # удаляем старые модели
+        for obj in collections[0].objects:
+            if obj.type != 'MESH':
+                continue
+            for i in range(4, 8):
+                if len(collections) == 1:
+                    continue
+                coll_name = model().morph_collection[i]
+                for obj in collections[i].objects:
+                    if obj.type != 'MESH':
+                        continue
+                    coll = scene.collection.children[coll_name]
+                    del_name = obj.name
+                    #if (model().morph_comp[i] + obj.name) in coll.objects:
+                    self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
+                    bpy.data.objects.remove(bpy.data.objects[del_name])
+
+        for mc in range(0, 4):
+            for obj in collections[mc].objects:
+                if obj.type != 'MESH':
+                    continue
+                links[obj.name] = None if obj.parent is None else obj.parent.name
+            # добавляем коллекции
+                #for i in range(4, 7):
+                coll_name = model().morph_collection[mc+4]
+                if coll_name not in scene.collection.children:
+                    new_col = bpy.data.collections.new(coll_name)
+                    scene.collection.children.link(new_col)
+
+                coll = scene.collection.children[coll_name]
+                morph_name = model().morph_comp[mc+4]
+                #if morph_name in coll.objects:
+                #    continue
+            # копируем меши
+                    #detect suitable obj
+                new_obj = obj.copy()
+                new_obj.name = model().morph_comp[mc+4] + get_true_name(obj.name)
+                new_obj.data = obj.data.copy()
+                new_obj.data.name = new_obj.name
+                coll.objects.link(new_obj)
+                new_obj.select_set(False)
+            # привязываем родителей
+            #for c in range(4, 7):
+            for obj in collections[mc+4].objects:
+                for child, parent in links.items():
+                    if parent is None:
+                        continue
+                    bpy.data.objects[model().morph_comp[mc+4] + get_true_name(child)].parent = bpy.data.objects[model().morph_comp[mc+4] + get_true_name(parent)]
+            for obj in bpy.context.selected_objects:
+                obj.select_set(False)
+            #Трогаем только scaled коллекции
+            #for s in range(4, 7):
+            for obj in collections[mc+4].objects:
+                for child, parent in links.items():
+                    if parent is None:
+                        #continue
+                        bpy.data.objects[model().morph_comp[mc+4] + get_true_name(child)].scale = (scaled, scaled, scaled)
+                            
+                            
+            for obj in bpy.context.selected_objects:
+                obj.select_set(False)
+            for obj in bpy.data.objects:
+            # Применяем все трансформации
+                obj.select_set(True)
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+            #for obj in bpy.context.selected_objects:
+                obj.select_set(False)
+
+        return {'FINISHED'}
+
 class CChooseResFile(bpy.types.Operator, ImportHelper):
     '''
     Operator to choose *.res file
@@ -249,7 +766,11 @@ class CImport_OP_operator(bpy.types.Operator):
             active_model.reset('fig')
             active_model.name = model_name
             read_model(resFile, model_name)
-            read_bones(resFile, model_name)
+#            if read_figSignature(resFile, model_name) == 8:          ##LostSoul
+            bEtherlord = bpy.context.scene.ether
+            if not bEtherlord:
+                read_bones(resFile, model_name)
+#                break
             for fig in active_model.mesh_list:
                 create_mesh_2(fig)
             create_links_2(active_model.links)
@@ -281,7 +802,7 @@ class CImport_OP_operator(bpy.types.Operator):
                         read_bone(resFile, part + '.bon')
                     else:
                         print(part + '.bon not found')
-
+            #RuntimeError('Stopping the script here')
             for fig in active_model.mesh_list:
                 create_mesh_2(fig)
 
@@ -342,10 +863,27 @@ class CAnimation_OP_import(bpy.types.Operator):
         active_model.reset('anm')
 
         read_animations(resFile, model_name, anm_name)
-        collect_links()
+        collect_links() #Lost Soul - fix for rewrite animations after close file
         ei2abs_rorations()
-        abs2Blender_rotations()
+        bAutofix = bpy.context.scene.animsubfix
+        if not bAutofix:     
+            abs2Blender_rotations()
         insert_animation(active_model.anm_list)
+        self.report({'INFO'}, 'Done')
+        return {'FINISHED'}
+
+class CAnimation_OP_shapekey(bpy.types.Operator):
+    bl_label = 'Shapekey animation Operator'
+    bl_idname = 'object.animation_shapekey'
+    bl_description = 'Shapekey animation of a model'
+
+    def execute(self, context):
+        self.report({'INFO'}, 'Executing shapekey')
+
+        #importlib.reload(scene_utils)
+        # active_model: CModel = bpy.types.Scene.model
+        scene_utils.animation_to_shapekey(context)
+
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
 
@@ -453,10 +991,12 @@ class CExport_OP_operator(bpy.types.Operator):
         if bAutofix:
             auto_fix_scene()
 
+
         if not is_model_correct():
             self.report({'ERROR'}, 'Model/Figure cannot pass check. \nSee System Console (Window->Toggle System Console)')
             return {'CANCELLED'}
         collect_links()
+        active_model.pos_list.clear()
         collect_pos()
         collect_mesh()
         

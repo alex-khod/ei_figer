@@ -13,6 +13,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
+import bpy
 from struct import pack, unpack
 from mathutils import Quaternion
 from . utils import read_xyzw, write_xyzw, read_xyz, write_xyz, CByteReader
@@ -27,6 +28,8 @@ class CAnimation(object):
         self.abs_rotation : list[Quaternion] = []
         self.translations = []
         self.morphations = []
+        self.something = [] #масштаб?
+        self.frameinfo = []
 
     def read_anm(self, name, raw_data : bytearray):
         """
@@ -34,27 +37,46 @@ class CAnimation(object):
         """
         self.name = name
         parser = CByteReader(raw_data)
-        rot_count = parser.read('i')
 
         #rotations
+        rot_count = parser.read('i')
         for _ in range(rot_count):
             self.rotations.append(Quaternion(parser.read('ffff')))
         
         #translations
         trans_count = parser.read('i')
         for _ in range(trans_count):
-            self.translations.append(parser.read('fff'))
+            self.translations.append(parser.read('fff')) #ddd для ether2
         
-        #morphations
-        morhp_frame_count = parser.read('i')
-        if morhp_frame_count == 0 and parser.is_EOF():
+        bEtherlord = bpy.context.scene.ether
+        if bEtherlord:
+        #scalings?
+            something_frame_count = parser.read('i')
+            #print('name = ' + name)
+            #print('something_frame_count = ' + str(something_frame_count))           
+            for _ in range(something_frame_count):
+                something = self.something.append(parser.read('fff'))
+                #print('something = ' + str(something))
+            
+        if parser.is_EOF():
             #print('EOF reached')
             return 0
-        morph_vert_count = parser.read('i')
+        #morphations
+        morhp_frame_count = parser.read('i')
+#        print('morhp_frame_count = ' + str(morhp_frame_count))
+        if parser.is_EOF():
+            #print('EOF reached')
+            return 0
+        morhp_vert_count = parser.read('i')
+#        print('resul_vert_count = ' + str(morhp_vert_count))
+#        print('------------------- ')
+        
         for _ in range(morhp_frame_count):
             morph = list()
-            for _ in range(morph_vert_count):
-                morph.append(parser.read('fff'))
+            for _ in range(morhp_vert_count):
+                #print('trans_count = ' + str(trans_count))
+                morph.append(parser.read('fff')) #оригинал. 
+                #morph.append(parser.read('fff')) 
             self.morphations.append(morph)
         if parser.is_EOF():
             #print('EOF reached')
