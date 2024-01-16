@@ -80,7 +80,7 @@ class CItemGroupContainer:
             ,CItemGroup('shield', re.compile(r'lh2\.axe\d+'), 1, 18, 2, 8, uv_base=(1, 1))
             ,CItemGroup('exshield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(1, 1))
             ,CItemGroup('weapons left', re.compile(r'(lh3\.(pike|sword|dagger|club|axe|shit1|shit2\D+)|^shit1|^shit2\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1))
-            ,CItemGroup('weapons',   re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
+            ,CItemGroup('weapons',   re.compile(r'(\.(pike|dpike|sword|dsword|dagger|club|dclub|axe|daxe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
             ,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
 
             #,CItemGroup('weapons left', re.compile(r'((lh3.pike|lh3.sword|lh3.dagger|lh3.2axe|lh3.club|lh3.axe|lh3.crbow|bw\D+)|^lh3.crbow|^lh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1))

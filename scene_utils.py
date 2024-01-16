@@ -269,11 +269,13 @@ def create_mesh_2(figure:CFigure):
         
         
         #TODO: create material
+        print('meshname ' + name + ' is creating')
         base_mesh.uv_layers.new(name=bpy.context.scene.model.name)
         for uv_ind in range(figure.header[3]):
             for xy in range(2):
                 base_mesh.uv_layers[0].data[uv_ind].uv[xy] = \
                         figure.t_coords[figure.v_c[figure.indicies[uv_ind]][1]][xy]
+        print('meshname ' + name + ' created')
         base_mesh.update()
     
 def set_pos_2(bone : CBone):
