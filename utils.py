@@ -89,7 +89,7 @@ class CItemGroupContainer:
             #,CItemGroup('shield', re.compile(r'lh2.shield\d+'), 1, 18, 2, 8, uv_base=(1, 0))
 
             ,CItemGroup('armor',            re.compile(r'\.armor\d+'), 0, 19, 1, 8)
-            ,CItemGroup('unit',             re.compile(r'un(an|mo|hu|or).+'), 0, 19, 1, 8)
+            ,CItemGroup('unit',             re.compile(r'un(an|mo|hu|or|sk).+'), 0, 19, 1, 8)
 
             ,CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8) #LAST
             ]
