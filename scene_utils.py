@@ -869,32 +869,18 @@ def animation_to_shapekey(context):
             insert_keyframe(new_key, frame)
         
         if bAutofix:
-            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
-            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]*2-0.385398-0.16
-
-    #        acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
-    #        acceptor.rotation_euler[1] = armature.rotation_euler[0]
-    #        acceptor.rotation_euler[2] = armature.rotation_euler[2]+1.570796
             acceptor.rotation_euler[0] = armature.rotation_euler[0]
             acceptor.rotation_euler[1] = armature.rotation_euler[1]
             acceptor.rotation_euler[2] = armature.rotation_euler[2]
 
-            #acceptor.rotation_euler[2] = armature.rotation_euler[2]-1.570796-1.570796
             acceptor.keyframe_insert(data_path='rotation_euler', index=-1)
 
-            #acceptor.location[0] = armature.location[0]/100+0.028571
-
-    #        acceptor.location[0] = armature.location[0]+2.8571/100
-    #        acceptor.location[1] = armature.location[1]
-    #        acceptor.location[2] = (armature.location[2]/100+ (0.08+8)/100)
             acceptor.location[0] = armature.location[0]
             acceptor.location[1] = armature.location[1]
             acceptor.location[2] = armature.location[2]
             
             acceptor.keyframe_insert(data_path='location', index=-1)
-            
-            #acceptor.scale = donor.scale*100
-            #acceptor.scale = [1,1,1]
+
             acceptor.scale = donor.scale
             
             #acceptor.transform_apply(location=False, rotation=False, scale=True)
