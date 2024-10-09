@@ -93,9 +93,13 @@ class CAnimation(object):
         for trans in self.translations:
             raw_data += pack('%sf' % len(trans), *trans)
         #morphations
-        raw_data += (pack('i', len(self.morphations)))
+        raw_data += pack('i', len(self.morphations))
+        #raw_data += pack('i', 0)
         if len(self.morphations) > 0:
             raw_data += pack('i', len(self.morphations[0]))
+        else:
+            raw_data += pack('i', 0)
+            
         for frame in self.morphations:
             for vec in frame:
                 raw_data += pack('%sf' % len(vec), *vec)
@@ -145,6 +149,8 @@ class CAnimation(object):
             anm_file.write(pack('i', len(self.morphations)))
             if len(self.morphations) > 0:
                 anm_file.write(pack('i', len(self.morphations[0])))
+            else:
+                anm_file.write(pack('i', 0))
             for frame in self.morphations:
                 for vec in frame:
                     write_xyz(anm_file, vec)

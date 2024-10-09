@@ -13,7 +13,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from . utils import CByteReader, unpack_uv, pack_uv, pack, unpack, \
-    read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, get_uv_params
+    read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, get_uv_params, get_uv_group_name, get_uv_convert_count, get_uv_base
 from . bone import CBone
 
 class CFigure(object):
@@ -73,8 +73,8 @@ class CFigure(object):
         signature = parser.read('ssss').decode()
 #        signature = parser.read('i')
         print('signature is ' + str(signature))
-        #if signature != 'FIG8':
-        #    print(self.name + ' has unknown figure signature: ' + signature)
+        if signature != 'FIG8':
+            print(self.name + ' has not FIG8 figure signature: ' + signature)
         #    return 2
         if signature == 'FIG8':           ##LostSoul
             self.morph_count = 8
@@ -85,7 +85,7 @@ class CFigure(object):
         else:    
             self.morph_count = 1
         # header
-        print('morph_count is ' + str(self.morph_count))
+        print(self.name + ' have morph_count is ' + str(self.morph_count))
         
         for i in range(9):
             self.header[i] = parser.read('i')
@@ -136,6 +136,10 @@ class CFigure(object):
             t_coord = parser.read('ff')            
             self.t_coords.append(list(t_coord))
         unpack_uv(self.t_coords, *get_uv_params(self.name))
+        #print(self.name + ' item group is  ' + str(get_uv_group_name(self.name)) +' uvpar is ' + get_uv_params(self.name))
+        #print(self.name  +' uvcount is ' + str(get_uv_convert_count(self.name)))
+        print(self.name + ' item group is  ' + str(get_uv_group_name(self.name)) +' uvcount is ' + str(get_uv_convert_count(self.name))  + ' uvbase ' + str(get_uv_base(self.name)))
+       
         # INDICES
         for _ in range(self.header[3]):
             self.indicies.append(parser.read('h'))

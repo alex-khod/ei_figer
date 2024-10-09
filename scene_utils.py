@@ -546,7 +546,7 @@ def collect_mesh():
     obj_count = item.morph_component_count
     collections = bpy.context.scene.collection.children
 
-    individual_group=['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left', 'weapons', 'armor']
+    individual_group=['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left', 'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
 
     for obj in collections[0].objects:
         if obj.type != 'MESH':
@@ -865,22 +865,41 @@ def animation_to_shapekey(context):
             new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
             for i, vertex in enumerate(donor_bm.verts):
                 new_key.data[i].co = vertex.co
+                #new_key.data[i].x = vertex.x + armature.location[0]
+                #new_key.data[i].y = vertex.y + armature.location[1]
+                #new_key.data[i].z = vertex.z + armature.location[2]
+                
             #bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
             insert_keyframe(new_key, frame)
         
         if bAutofix:
-            acceptor.rotation_euler[0] = armature.rotation_euler[0]
-            acceptor.rotation_euler[1] = armature.rotation_euler[1]
-            acceptor.rotation_euler[2] = armature.rotation_euler[2]
+            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
+            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]*2-0.385398-0.16
 
-            acceptor.keyframe_insert(data_path='rotation_euler', index=-1)
+    #        acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
+    #        acceptor.rotation_euler[1] = armature.rotation_euler[0]
+    #        acceptor.rotation_euler[2] = armature.rotation_euler[2]+1.570796
+            acceptor.rotation_quaternion[0] = armature.rotation_quaternion[0]
+            acceptor.rotation_quaternion[1] = armature.rotation_quaternion[1]
+            acceptor.rotation_quaternion[2] = armature.rotation_quaternion[2]
+            acceptor.rotation_quaternion[3] = armature.rotation_quaternion[3]
 
+            #acceptor.rotation_euler[2] = armature.rotation_euler[2]-1.570796-1.570796
+            acceptor.keyframe_insert(data_path='rotation_quaternion', index=-1)
+
+            #acceptor.location[0] = armature.location[0]/100+0.028571
+
+    #        acceptor.location[0] = armature.location[0]+2.8571/100
+    #        acceptor.location[1] = armature.location[1]
+    #        acceptor.location[2] = (armature.location[2]/100+ (0.08+8)/100)
             acceptor.location[0] = armature.location[0]
             acceptor.location[1] = armature.location[1]
             acceptor.location[2] = armature.location[2]
             
             acceptor.keyframe_insert(data_path='location', index=-1)
-
+            
+            #acceptor.scale = donor.scale*100
+            #acceptor.scale = [1,1,1]
             acceptor.scale = donor.scale
             
             #acceptor.transform_apply(location=False, rotation=False, scale=True)
