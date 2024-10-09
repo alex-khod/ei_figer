@@ -16,7 +16,7 @@ import bpy
 import bmesh
 import copy
 from math import sqrt
-from mathutils import Quaternion
+from mathutils import Quaternion, Vector, Matrix
 import copy as cp
 import collections
 
@@ -835,12 +835,63 @@ def auto_fix_scene():
 
     # copy empty components
     pass
-    
+
+def get_donor_acceptor(context: bpy.types.Context) -> [bpy.types.Object, bpy.types.Object]:
+    active = context.active_object
+    if (active is None):
+        raise Exception("No object is active")
+    acceptor = active
+    selected = context.selected_objects
+    donors = list(filter(lambda x: x != active, selected))
+    if (len(donors) != 1):
+        raise Exception("Exactly two objects need to be selected: first donor, then acceptor")
+    donor = donors[0]
+    return donor, acceptor
+
+def transform(object):
+    # doesn't work
+    current_matrix = object.matrix_world.copy()
+    mesh = object.data
+    original_vertices = [v.co.copy() for v in mesh.vertices]
+
+    bpy.ops.object.mode_set(mode='EDIT')
+
+    # Update to the latest vertex positions
+    bpy.ops.mesh.select_all(action='SELECT')
+
+    for i, vertex in enumerate(mesh.vertices):
+        print(vertex)
+        # Transform the vertex position using the matrix
+        transformed_position = current_matrix @ Vector(original_vertices[i])
+        vertex.co = transformed_position
+
+    # Reset the object’s transformations
+    object.matrix_world = Matrix.Identity(4)
+
+def transform2(object):
+    # doesn't work either
+    current_matrix = object.matrix_world.copy()
+
+    # Decompose to get location, rotation, and scale
+    location, rotation, scale = current_matrix.decompose()
+
+    # Create a new transformation matrix with applied rotation and location
+    new_matrix = Matrix.Translation(
+        location) @ rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
+
+    # Set the object's matrix to the new matrix
+    object.matrix_world = new_matrix
+
+    # Reset the local rotation and scale (if necessary)
+    object.location = (0, 0, 0)
+    object.rotation_euler = (0.0, 0.0, 0.0)
+    object.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+    object.scale = (1.0, 1.0, 1.0)
+
 def animation_to_shapekey(context):
-    # first and second selected objects are donor & acceptor
-    donor = context.selected_objects[0]
-    acceptor = context.selected_objects[1]
-    armature = context.selected_objects[0]
+    donor, acceptor = get_donor_acceptor(context)
+    armature = donor
+    acceptor.shape_key_clear()
 
     bAutofix = bpy.context.scene.skeletal
     if not bAutofix:
@@ -848,26 +899,30 @@ def animation_to_shapekey(context):
     # huh
     # for i, vertex in enumerate(donor.data.vertices):
     #     base_key.data[i].co = vertex.co
-
     # for animating verts
     depgraph = context.evaluated_depsgraph_get()
-
     for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
         context.scene.frame_set(frame)
         if not bAutofix:
-
             # animate vertices
             donor_bm = bmesh.new()
-            donor_bm.verts.ensure_lookup_table()
             donor_bm.from_object(donor, depgraph)
+            donor_bm.verts.ensure_lookup_table()
+            #donor_verts = donor.data.vertices
+            donor_verts = donor_bm.verts
 
             # copy verts from donor to acceptor
             new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
-            for i, vertex in enumerate(donor_bm.verts):
+
+            #bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
+            for i, vertex in enumerate(donor_verts):
                 new_key.data[i].co = vertex.co
+                vertex: bmesh.types.BMVert
+                # new_key.data[i].co = donor.matrix_world @ vertex.co
                 #new_key.data[i].x = vertex.x + armature.location[0]
                 #new_key.data[i].y = vertex.y + armature.location[1]
                 #new_key.data[i].z = vertex.z + armature.location[2]
+            # print(new_key.data[0].co, donor_verts[0].co)
                 
             #bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
             insert_keyframe(new_key, frame)
@@ -904,3 +959,60 @@ def animation_to_shapekey(context):
             
             #acceptor.transform_apply(location=False, rotation=False, scale=True)
             acceptor.keyframe_insert(data_path='scale', index=-1)
+
+# set cursor
+# bpy.context.scene.cursor.location = (0, 0, 0)
+# set origin to cursor
+# bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+# set location
+# obj.location = (0, 0, 0)
+
+def bake_transform_one(object, context):
+    donor = object
+
+    # for coll in bpy.data.collections["body"]:
+    acceptor = donor.copy()
+    acceptor.data = donor.data.copy()
+    acceptor.animation_data_clear()
+    context.collection.objects.link(acceptor)
+
+    acceptor.shape_key_clear()
+
+    # apply transforms
+    bpy.ops.object.select_all(action='DESELECT')
+    acceptor.select_set(True)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    acceptor.shape_key_add(name='basis', from_mix=False)
+    for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
+        context.scene.frame_set(frame)
+
+        frame_donor = donor.copy()
+        frame_donor.data = donor.data.copy()
+        frame_donor.animation_data_clear()
+        context.collection.objects.link(frame_donor)
+        context.view_layer.objects.active = frame_donor
+
+        # apply transforms
+        bpy.ops.object.select_all(action='DESELECT')
+        frame_donor.select_set(True)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+        new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
+        donor_verts = frame_donor.data.vertices
+        for i, vertex in enumerate(donor_verts):
+            vertex: bmesh.types.BMVert
+            new_key.data[i].co = vertex.co
+        insert_keyframe(new_key, frame)
+
+        context.collection.objects.unlink(frame_donor)
+    # remove donor
+    name = donor.name
+    bpy.data.objects.remove(donor)
+    acceptor.name = name
+
+def animation_bake_transform(context: bpy.types.Context):
+    selected = context.selected_objects.copy()
+    for object in selected:
+        print(object)
+        bake_transform_one(object, context)

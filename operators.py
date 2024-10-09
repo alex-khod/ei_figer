@@ -875,14 +875,31 @@ class CAnimation_OP_import(bpy.types.Operator):
 class CAnimation_OP_shapekey(bpy.types.Operator):
     bl_label = 'Shapekey animation Operator'
     bl_idname = 'object.animation_shapekey'
-    bl_description = 'Shapekey animation of a model'
+    bl_description = "Select two models, first Donor then Acceptor. " \
+                     "Donor's vertex animation will be transferred as shapekeys to " \
+                     "Acceptor."
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing shapekey')
 
-        #importlib.reload(scene_utils)
+        importlib.reload(scene_utils)
         # active_model: CModel = bpy.types.Scene.model
         scene_utils.animation_to_shapekey(context)
+
+        self.report({'INFO'}, 'Done')
+        return {'FINISHED'}
+
+class CAnimation_OP_BakeTransform(bpy.types.Operator):
+    bl_label = 'Bake transform operator'
+    bl_idname = 'object.animation_bake_transform'
+    bl_description = 'For each object in selection, moves location' \
+                     ' / rotation / scale animation into shapekeys'
+
+    def execute(self, context):
+        self.report({'INFO'}, 'Executing bake transform')
+
+        importlib.reload(scene_utils)
+        scene_utils.animation_bake_transform(context)
 
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
@@ -964,7 +981,6 @@ class CAnimation_OP_Export(bpy.types.Operator):
 
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
-
         
 class CExport_OP_operator(bpy.types.Operator):
     bl_label = 'EI model export Operator'

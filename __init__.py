@@ -49,6 +49,7 @@ CAutoFillMorphScaledOnly_OP_Operator,
 CImport_OP_operator,
 CAnimation_OP_import,
 CAnimation_OP_Export,
+CAnimation_OP_BakeTransform,
 CExport_OP_operator,
 CAutoFillMorph_OP_Operator,
 CAnimation_OP_shapekey
