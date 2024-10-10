@@ -24,39 +24,42 @@ bl_info = {
     'tracker_url': 'https://github.com/konstvest/ei_figer',
     'category': 'Import-Export'}
 
-from . UI_panel import *
-from . operators import *
+from . import UI_panel
+from . import operators
 from . properties import register_props, unregister_props
 from bpy.utils import register_class
 from bpy.utils import unregister_class
 
 
 bl_panels = (
-IMPORT_EXPORT_PT_PANEL,
-OPERATOR_PT_PANEL,
-OPERATORMASS_PT_PANEL,
-ANIMATION_PT_PANEL
+    UI_panel.IMPORT_EXPORT_PT_PANEL,
+    UI_panel.OPERATOR_PT_PANEL,
+    UI_panel.OPERATORMASS_PT_PANEL,
+    UI_panel.ANIMATION_PT_PANEL
 )
 
 bl_operators = (
-CChooseResFile,
-CAddMorphComp_OP_Operator,
-CAddMorphCompNamed_OP_Operator,
-CAddAllMorphComp_OP_Operator,
-CAutoFillMorphNew_OP_Operator,
-CFixPos_OP_Operator,
-CAutoFillMorphScaledOnly_OP_Operator,
-CImport_OP_operator,
-CAnimation_OP_import,
-CAnimation_OP_Export,
-CAnimation_OP_BakeTransform,
-CExport_OP_operator,
-CAutoFillMorph_OP_Operator,
-CAnimation_OP_shapekey
-
+    operators.CChooseResFile,
+    operators.CAddMorphComp_OP_Operator,
+    operators.CAddMorphCompNamed_OP_Operator,
+    operators.CAddAllMorphComp_OP_Operator,
+    operators.CAutoFillMorphNew_OP_Operator,
+    operators.CFixPos_OP_Operator,
+    operators.CAutoFillMorphScaledOnly_OP_Operator,
+    operators.CImport_OP_operator,
+    operators.CAnimation_OP_import,
+    operators.CAnimation_OP_Export,
+    operators.CAnimation_OP_BakeTransform,
+    operators.CExport_OP_operator,
+    operators.CAutoFillMorph_OP_Operator,
+    operators.CAnimation_OP_shapekey
 )
 
-def register():    
+import importlib
+
+def register():
+    print("OK")
+    importlib.reload(operators)
     for panel in bl_panels:
         print ('reg panel: ' + str(panel))
         register_class(panel)
