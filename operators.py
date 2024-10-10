@@ -416,6 +416,7 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
     bl_description = 'Generates morph components based on existing once'
 
     def execute(self, context):
+
         collections = bpy.context.scene.collection.children
         if len(collections) < 0:
             self.report({'ERROR'}, 'Scene empty')
@@ -454,7 +455,7 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
                     continue
 
                 #detect suitable obj
-                new_obj = obj.copy()
+                new_obj: bpy.types.Object = obj.copy()
                 new_obj.name = model().morph_comp[i] + obj.name
                 new_obj.data = obj.data.copy()
                 new_obj.data.name = new_obj.name
@@ -474,7 +475,8 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
 class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
     bl_label = 'AutoMorphing'
     bl_idname = 'object.automorphnew'
-    bl_description = 'Generates morph components based on existing -base- collection'
+    bl_description = 'Generates morph components based on existing -base- collection ? ' \
+                     'if you have animation going on, set frame beyond animation range'
 
     def execute(self, context):
         collections = bpy.context.scene.collection.children
@@ -541,9 +543,13 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
                     continue
         # копируем меши
                 #detect suitable obj
+
                 new_obj = obj.copy()
                 new_obj.name = model().morph_comp[i] + obj.name
                 new_obj.data = obj.data.copy()
+                # all my homies hate animation
+                new_obj.animation_data_clear()
+                new_obj.shape_key_clear()
                 new_obj.data.name = new_obj.name
                 coll.objects.link(new_obj)
                 new_obj.select_set(False)
