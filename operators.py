@@ -553,36 +553,34 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
                 new_obj.data.name = new_obj.name
                 coll.objects.link(new_obj)
                 new_obj.select_set(False)
-        # привязываем родителей
-        for c in range(1, 8):
-            for obj in collections[c].objects:
-                for child, parent in links.items():
-                    if parent is None:
-                        continue
-                    bpy.data.objects[model().morph_comp[c] + child].parent = bpy.data.objects[model().morph_comp[c] + parent]
+
+        vectors = [
+            (scn.s_s_x, scn.s_s_y, scn.s_s_z),
+            (scn.s_d_x, scn.s_d_y, scn.s_d_z),
+            (scn.s_u_x, scn.s_u_y, scn.s_u_z),
+            (scn.scaled, scn.scaled, scn.scaled),
+            (scaled + scn.s_s_x - 1, scaled + scn.s_s_y - 1, scaled + scn.s_s_z - 1),
+            (scaled + scn.s_d_x - 1, scaled + scn.s_d_y - 1, scaled + scn.s_d_z - 1),
+            (scaled + scn.s_u_x - 1, scaled + scn.s_u_y - 1, scaled + scn.s_u_z - 1),
+        ]
+
         for obj in bpy.context.selected_objects:
             obj.select_set(False)
+
+        # привязываем родителей
+        for s in range(1, 8):
+            for child, parent in links.items():
+                if parent is None:
+                    continue
+                bpy.data.objects[model().morph_comp[s] + child].parent = bpy.data.objects[
+                    model().morph_comp[s] + parent]
+
         #Трогаем только scaled коллекции
         for s in range(1, 8):
-            for obj in collections[s].objects:
-                for child, parent in links.items():
-                    if parent is None:
-                        if s == 1:
-                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.s_s_x, scn.s_s_y, scn.s_s_z)
-                        if s == 2:
-                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.s_d_x, scn.s_d_y, scn.s_d_z)
-                        if s == 3:
-                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.s_u_x, scn.s_u_y, scn.s_u_z)
-                        if s == 4:
-                            bpy.data.objects[model().morph_comp[s] + child].scale = (scn.scaled, scn.scaled, scn.scaled)
-                        if s == 5:
-                            bpy.data.objects[model().morph_comp[s] + child].scale = (scaled+scn.s_s_x-1, scaled+scn.s_s_y-1, scaled+scn.s_s_z-1)
-                        if s == 6:
-                            bpy.data.objects[model().morph_comp[s] + child].scale = (scaled+scn.s_d_x-1, scaled+scn.s_d_y-1, scaled+scn.s_d_z-1)
-                        if s == 7:
-                            bpy.data.objects[model().morph_comp[s] + child].scale = (scaled+scn.s_u_x-1, scaled+scn.s_u_y-1, scaled+scn.s_u_z-1)
-                        
-                        
+            for child, parent in links.items():
+                if parent is None:
+                    bpy.data.objects[model().morph_comp[s] + child].scale = vectors[s - 1]
+
         for obj in bpy.context.selected_objects:
             obj.select_set(False)
         for obj in bpy.data.objects:
