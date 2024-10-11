@@ -370,6 +370,12 @@ def insert_animation(anm_list : list[CAnimation]):
 
     return err
 
+def get_res_file_buffer(index):
+    return getattr(bpy.context.scene, 'res_file_buffer%d' % index)
+
+def set_res_file_buffer(index, value):
+    setattr(bpy.context.scene, 'res_file_buffer%d' % index, value)
+
 def collect_animations():
     active_model : CModel = bpy.types.Scene.model
     for obj in bpy.data.objects:
@@ -984,7 +990,8 @@ def bake_transform_one(object, context):
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
     acceptor.shape_key_add(name='basis', from_mix=False)
-    for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
+    frames = list(range(context.scene.frame_start, context.scene.frame_end + 1))
+    for frame in frames:
         context.scene.frame_set(frame)
 
         frame_donor = donor.copy()
@@ -1006,6 +1013,7 @@ def bake_transform_one(object, context):
         insert_keyframe(new_key, frame)
 
         context.collection.objects.unlink(frame_donor)
+
     # remove donor
     name = donor.name
     bpy.data.objects.remove(donor)

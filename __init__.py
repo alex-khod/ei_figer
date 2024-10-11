@@ -26,6 +26,7 @@ bl_info = {
 
 from . import UI_panel
 from . import operators
+from . import scene_utils
 from . properties import register_props, unregister_props
 from bpy.utils import register_class
 from bpy.utils import unregister_class
@@ -40,6 +41,7 @@ bl_panels = (
 
 bl_operators = (
     operators.CChooseResFile,
+    operators.CSelectResFileIndex,
     operators.CAddMorphComp_OP_Operator,
     operators.CAddMorphCompNamed_OP_Operator,
     operators.CAddAllMorphComp_OP_Operator,
@@ -57,9 +59,15 @@ bl_operators = (
 
 import importlib
 
-def register():
-    print("OK")
+def reload_modules():
+    importlib.reload(UI_panel)
     importlib.reload(operators)
+    importlib.reload(scene_utils)
+    importlib.reload(properties)
+
+def register():
+    print("Register")
+
     for panel in bl_panels:
         print ('reg panel: ' + str(panel))
         register_class(panel)
@@ -70,6 +78,7 @@ def register():
     register_props()
     
 def unregister():
+    reload_modules()
     for panel in bl_panels:
         unregister_class(panel)
     for oper in bl_operators:

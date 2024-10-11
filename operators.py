@@ -723,6 +723,19 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
 
         return {'FINISHED'}
 
+class CSelectResFileIndex(bpy.types.Operator):
+    bl_label = 'Select Resfile'
+    bl_idname = 'object.select_resfile'
+    bl_description = 'Select this res file'
+
+    res_file_index: bpy.props.IntProperty(
+        default=0, options={'HIDDEN'},
+    )
+
+    def execute(self, context):
+        context.scene.res_file = get_res_file_buffer(self.res_file_index)
+        return {'FINISHED'}
+
 class CChooseResFile(bpy.types.Operator, ImportHelper):
     '''
     Operator to choose *.res file
@@ -739,8 +752,13 @@ class CChooseResFile(bpy.types.Operator, ImportHelper):
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
+    res_file_index: bpy.props.IntProperty(
+        default=0, options={'HIDDEN'},
+    )
+
     def execute(self, context):
-        bpy.context.scene.res_file = self.filepath
+        importlib.reload(scene_utils)
+        scene_utils.set_res_file_buffer(self.res_file_index, self.filepath)
         return {'FINISHED'}
 
     def invoke(self, context, event):

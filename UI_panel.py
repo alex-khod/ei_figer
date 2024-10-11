@@ -26,10 +26,13 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        row = layout.row()
-        elem = row.split(factor=0.8)
-        elem.prop(context.scene, 'res_file')
-        elem.operator('object.choose_resfile', text='...')
+        for index in range(0, 3):
+            row = layout.row()
+            elem = row.split(factor=0.8)
+            elem.prop(context.scene, 'res_file_buffer%d' % index)
+            elem.operator('object.choose_resfile', text='...').res_file_index = index
+            elem.operator('object.select_resfile', text='Select').res_file_index = index
+        layout.label(text=str(context.scene.res_file), icon='FILE_FOLDER')
         layout.prop(context.scene, 'figmodel_name')
         layout.operator('object.model_import', text='Import')
         row = layout.split()

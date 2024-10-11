@@ -18,11 +18,26 @@ from . scene_management import CModel
 
 def register_props():
     scene = bpy.types.Scene
+
+    scene.res_file_index = bpy.props.IntProperty(
+        name='ResFileIdx',
+        default=0,
+        description='# of res file to use'
+    )
+
     scene.res_file = bpy.props.StringProperty(
-        name='ResFile',
-        default='',
+        name='Current Res',
+        default='?.res',
         description='*.res file containing models, figures, animations. Usually Figures.res'
     )
+
+    for i in range(0, 3):
+        prop = bpy.props.StringProperty(
+            name='Res %d' % (i + 1),
+            default='figures.res',
+            description='*.res file containing models, figures, animations. Usually Figures.res'
+        )
+        setattr(scene, "res_file_buffer%d" % i,  prop)
 
     scene.figmodel_name = bpy.props.StringProperty(
         name='Name',
@@ -221,6 +236,8 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
 def unregister_props():
     scene = bpy.types.Scene
     del scene.res_file
+    for i in range(0, 3):
+        delattr(scene, "res_file_buffer%d" % i)
     del scene.figmodel_name
     del scene.animation_name
     del scene.morph_comp
