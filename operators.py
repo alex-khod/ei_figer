@@ -472,19 +472,40 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
 
         return {'FINISHED'}
 
+def clear_old_morphs(obj_list):
+    scene = bpy.context.scene
+    collections = bpy.data.collections
+    if len(collections) == 1:
+        return False
+    for obj in obj_list:
+        if obj.type != 'MESH':
+            continue
+        for coll_name in model().morph_collection[1:]:
+            coll = collections.get(coll_name)
+            if not coll:
+                continue
+            for obj in coll.objects:
+                if obj.type != 'MESH':
+                    continue
+                coll = scene.collection.children[coll_name]
+                del_name = obj.name
+                #if (model().morph_comp[i] + obj.name) in coll.objects:
+                bpy.data.objects.remove(bpy.data.objects[del_name])
+    return True
+
 class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
     bl_label = 'AutoMorphing'
     bl_idname = 'object.automorphnew'
-    bl_description = 'Generates morph components based on existing -base- collection ? ' \
-                     'if you have animation going on, set frame beyond animation range'
+    bl_description = 'Generates morph components based on existing -base- collection' \
+                     'if you have animation going on, transformations will break it' \
+                     'so make a copy beforehand' \
 
     def execute(self, context):
-        collections = bpy.context.scene.collection.children
-        if len(collections) < 0:
-            self.report({'ERROR'}, 'Scene empty')
-            return {'CANCELLED'}
-        if collections[0].name != model().morph_collection[0]:
-            self.report({'ERROR'}, 'Base collection must be named as \"base\"')
+
+        collections = bpy.data.collections
+        base_coll = collections.get("base")
+        if not base_coll:
+            self.report({'ERROR'}, 'No base collection')
             return {'CANCELLED'}
 
         model().name = bpy.context.scene.figmodel_name
@@ -508,25 +529,11 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
 
         scn = scene
         scaled = scn.scaled
-        # удаляем старые модели
-        for obj in collections[0].objects:
-            if obj.type != 'MESH':
-                continue
-            for i in range(1, 8):
-                if len(collections) == 1:
-                    continue
-                coll_name = model().morph_collection[i]
-                for obj in collections[i].objects:
-                    if obj.type != 'MESH':
-                        continue
-                    coll = scene.collection.children[coll_name]
-                    del_name = obj.name
-                    #if (model().morph_comp[i] + obj.name) in coll.objects:
-                    self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
-                    bpy.data.objects.remove(bpy.data.objects[del_name])
 
+        if clear_old_morphs(base_coll.objects):
+            self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
 
-        for obj in collections[0].objects:
+        for obj in base_coll.objects:
             if obj.type != 'MESH':
                 continue
             links[obj.name] = None if obj.parent is None else obj.parent.name
@@ -583,12 +590,14 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
 
         for obj in bpy.context.selected_objects:
             obj.select_set(False)
-        for obj in bpy.data.objects:
-        # Применяем все трансформации
-            obj.select_set(True)
-            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-        #for obj in bpy.context.selected_objects:
-            obj.select_set(False)
+
+        for i in range(0, 8):
+            coll_name = model().morph_collection[i]
+            coll = bpy.data.collections.get(coll_name)
+            for obj in coll.objects:
+                obj.select_set(True)
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+                obj.select_set(False)
 
         return {'FINISHED'}
 
@@ -764,14 +773,23 @@ class CChooseResFile(bpy.types.Operator, ImportHelper):
         wm.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+class CClear_OP_operator(bpy.types.Operator):
+    bl_label = 'Clear scene'
+    bl_idname = 'object.clear_scene'
+    bl_description = 'Should be pretty obvious'
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        scene_clear()
+        return {'FINISHED'}
+
 class CImport_OP_operator(bpy.types.Operator):
     bl_label = 'EI model import Operator'
     bl_idname = 'object.model_import'
-    bl_description = 'Import Model/Figure from Evil Islands file'
+    bl_description = 'Import Model/Figure from selected resfile into base collection'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing import model')
-        scene_clear()
+
         res_path = bpy.context.scene.res_file
         if not res_path or not os.path.exists(res_path):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
@@ -875,22 +893,19 @@ class CAnimation_OP_import(bpy.types.Operator):
 
         with resFile.open(model_name + '.anm') as animation_container:
             anm_res_file = ResFile(animation_container)
-            anm_list =  anm_res_file.get_filename_list()
+            anm_list = anm_res_file.get_filename_list()
             if anm_name not in anm_list: #set of animations
                 self.report({'ERROR'}, 'Can not find ' + anm_name +\
                     '\nAnimation list: ' + str(anm_list))
                 return {'CANCELLED'}
         
-        active_model : CModel = bpy.types.Scene.model
-        active_model.reset('anm')
-
-        read_animations(resFile, model_name, anm_name)
-        collect_links() #Lost Soul - fix for rewrite animations after close file
-        ei2abs_rorations()
+        animations = read_animations(resFile, model_name, anm_name)
+        links = collect_links() #Lost Soul - fix for rewrite animations after close file
+        ei2abs_rotations(links, animations)
         bAutofix = bpy.context.scene.animsubfix
         if not bAutofix:     
-            abs2Blender_rotations()
-        insert_animation(active_model.anm_list)
+            abs2Blender_rotations(links, animations)
+        insert_animation(animations)
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
 
@@ -905,7 +920,6 @@ class CAnimation_OP_shapekey(bpy.types.Operator):
         self.report({'INFO'}, 'Executing shapekey')
 
         importlib.reload(scene_utils)
-        # active_model: CModel = bpy.types.Scene.model
         scene_utils.animation_to_shapekey(context)
 
         self.report({'INFO'}, 'Done')
@@ -933,7 +947,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
     bl_description = 'Export Animations for model'
 
     def execute(self, context):
-        self.report({'INFO'}, 'Executing annimation export')
+        self.report({'INFO'}, 'Executing animation export')
         res_path = bpy.context.scene.res_file
         if not res_path or not os.path.exists(res_path):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
@@ -951,33 +965,26 @@ class CAnimation_OP_Export(bpy.types.Operator):
             self.report({'ERROR'}, 'Animation name is empty')
             return {'CANCELLED'}
         
-        active_model : CModel = bpy.types.Scene.model
-        active_model.reset('anm')
-        collect_links()
-        collect_animations()
-        blender2abs_rotations()
-        abs2ei_rotations()
+        links = collect_links()
+        animations = collect_animations()
+        blender2abs_rotations(links, animations)
+        abs2ei_rotations(links, animations)
 
-        def write_animations():
-            nonlocal res_path
-            nonlocal anm_name
-            nonlocal model_name
-
+        def write_animations(res_path, model_name, anm_name):
             #pack crrent animation first. byte array for each part (lh1, lh2, etc)
             anm_res = io.BytesIO()
             with ResFile(anm_res, 'w') as res:
-                for part in active_model.anm_list:
+                for part in animations:
                     with res.open(part.name, 'w') as file:
                         data = part.write_anm()
                         file.write(data)
 
             # read all animation data(uattack, udeath and etc) from figures
-            anm_name = anm_name
-            model_name = model_name + '.anm'
+            export_model_name = model_name + '.anm'
             data = {}
             with (
                 ResFile(res_path, "r") as figres,
-                figres.open(model_name, "r") as anmfile,
+                figres.open(export_model_name, "r") as anmfile,
                 ResFile(anmfile, "r") as res
                 ):
                 for info in res.iter_files():
@@ -989,7 +996,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
             #write animations into res file
             with (
                 ResFile(res_path, "a") as figres,
-                figres.open(model_name, "w") as anmfile,
+                figres.open(export_model_name, "w") as anmfile,
                 ResFile(anmfile, "w") as res
                 ):
                 for name, anm_data in data.items():
@@ -998,8 +1005,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
 
             print(res_path + 'saved')
 
-
-        write_animations()
+        write_animations(res_path, model_name, anm_name)
 
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}

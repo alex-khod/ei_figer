@@ -31,6 +31,10 @@ class CAnimation(object):
         self.something = [] #масштаб?
         self.frameinfo = []
 
+    def __repr__(self):
+        #return f"CAnimation: name={self.name} at {id(self)}"
+        return f"CAnimation: name={self.name}"
+
     def read_anm(self, name, raw_data : bytearray):
         """
         Reads animation data from byte array (from .res file)

@@ -39,6 +39,8 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
         row.prop(context.scene, 'auto_fix')
         row.prop(context.scene, 'ether')
         row.operator('object.model_export', text='Export')
+        row = layout.row()
+        row.operator('object.clear_scene', text='Clear scene')
 
 
 class OPERATOR_PT_PANEL(bpy.types.Panel):

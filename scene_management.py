@@ -17,6 +17,40 @@ from . animation import CAnimation
 from . figure import CFigure
 from . bone import CBone
 
+class CAnimations():
+    def __init__(self, anm_list):
+        self.anm_list = anm_list
+
+    def __repr__(self):
+        length = len(self.anm_list)
+        postfix = "..." if length > 10 else ""
+        return f"CAnimations len={length} {self.anm_list[:10]} {postfix}"
+
+    def __iter__(self):
+        return iter(self.anm_list)
+
+    def __getitem__(self, index):
+        return self.anm_list[index]
+
+    def __len__(self):
+        return len(self.anm_list)
+
+    def __contains__(self, item):
+        return item in self.anm_list
+
+    def reset(self):
+        self.anm_list = []
+
+    def __values__(self):
+        return self.anm_list
+
+    def get_animation(self, part_name: str):
+        for anm in self.anm_list:
+            if part_name.lower() == anm.name.lower():
+                return anm
+        return None
+
+
 class CModel():
     def __init__(self):
         self.reset()
@@ -44,15 +78,14 @@ class CModel():
             'unique(scaled)',   #7
             'testUnit'          #8
         ]
+
+        self.mesh_list: list[CFigure] = list()
+        self.pos_list : list[CBone] = list()
         
     def reset(self, type : str ='all'):
         if type == 'fig' or type == 'all':
-            self.links = CLink()
-            self.mesh_list : list[CFigure] = list()
+            self.mesh_list: list[CFigure] = list()
             self.pos_list : list[CBone] = list()
-        if type == 'anm' or type == 'all':
-            #self.links = CLink()
-            self.anm_list : list[CAnimation] = list()
 
     def is_morph_name(self, name: str):
         for morph in self.morph_comp.values():
@@ -61,14 +94,3 @@ class CModel():
             if name.startswith(morph):
                 return True
         return False
-
-    def animation(self, part_name: str):
-        for anm in self.anm_list:
-            if part_name.lower() == anm.name.lower():
-                return anm
-        return None
-
-    def animation_part(self, anm_name : str, part_name : str) -> CAnimation:
-        for data in self.anm_table[anm_name]:
-            if data.name == part_name:
-                return data

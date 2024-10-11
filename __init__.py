@@ -26,11 +26,14 @@ bl_info = {
 
 from . import UI_panel
 from . import operators
-from . import scene_utils
 from . properties import register_props, unregister_props
 from bpy.utils import register_class
 from bpy.utils import unregister_class
 
+#for reloading
+from . import scene_utils
+from . import scene_management
+from . import animation
 
 bl_panels = (
     UI_panel.IMPORT_EXPORT_PT_PANEL,
@@ -54,7 +57,8 @@ bl_operators = (
     operators.CAnimation_OP_BakeTransform,
     operators.CExport_OP_operator,
     operators.CAutoFillMorph_OP_Operator,
-    operators.CAnimation_OP_shapekey
+    operators.CAnimation_OP_shapekey,
+    operators.CClear_OP_operator,
 )
 
 import importlib
@@ -62,8 +66,11 @@ import importlib
 def reload_modules():
     importlib.reload(UI_panel)
     importlib.reload(operators)
-    importlib.reload(scene_utils)
     importlib.reload(properties)
+
+    importlib.reload(scene_utils)
+    importlib.reload(scene_management)
+    importlib.reload(animation)
 
 def register():
     print("Register")

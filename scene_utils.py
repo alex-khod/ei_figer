@@ -24,7 +24,7 @@ from . utils import subVector, sumVector, CItemGroupContainer, mulVector, sumVec
 from . bone import CBone
 from . figure import CFigure
 from . resfile import ResFile
-from . scene_management import CModel
+from . scene_management import CModel, CAnimations
 from . animation import CAnimation
 from . links import CLink
 
@@ -106,10 +106,8 @@ def read_bones(resFile : ResFile, model_name):
             err += read_bone(bone_list_res, bone_name)
     return err
 
-def read_animations(resFile : ResFile, model_name : str, animation_name : str):
-    active_model : CModel = bpy.types.Scene.model
-    err = 0
-    #animations container
+def read_animations(resFile : ResFile, model_name : str, animation_name : str) -> CAnimations:
+    anm_list = []
     with resFile.open(model_name + '.anm') as animation_container:
         anm_res_file = ResFile(animation_container)
         with anm_res_file.open(animation_name) as animation_file:
@@ -119,79 +117,72 @@ def read_animations(resFile : ResFile, model_name : str, animation_name : str):
                     part = part_res.read()
                     anm = CAnimation()
                     anm.read_anm(part_name, part)
-                    active_model.anm_list.append(anm)
-    return err
+                    anm_list.append(anm)
+    return CAnimations(anm_list)
 
-def ei2abs_rorations():
+def ei2abs_rotations(links: CLink, animations: CAnimations):
     """
-    Calculates absolute rotations based on EI values
+    Calculates absolute rotations for parts in links, based on EI values
     """
-    active_model : CModel = bpy.types.Scene.model
-    lnk = active_model.links.links
+    lnk = links.links
     #TODO: check if links correctly (None parent has only 1 obj and other)
-    if not active_model.links:
-        return 1
+    if not links:
+        raise Exception("Error: empty links")
 
     def calc_frames(part : CAnimation):
-        nonlocal lnk
-        
         if lnk[part.name] is None: #root object
             part.abs_rotation = cp.deepcopy(part.rotations)
         else:
-            parent_anm = active_model.animation(lnk[part.name])
+            parent_anm = animations.get_animation(lnk[part.name])
+            print(lnk[part.name])
             if len(parent_anm.abs_rotation) == 0:
                 calc_frames(parent_anm)
             part.abs_rotation = cp.deepcopy(parent_anm.abs_rotation)
             for i in range(len(part.rotations)):
                 part.abs_rotation[i].rotate(part.rotations[i])
-    
+
+    print(animations)
+    print(animations.get_animation("head"))
+
     for part in lnk.keys():
-        anm = active_model.animation(part)
+        anm = animations.get_animation(part)
         if anm is None:
             print('animation for ' + part + ' not found')
         else:
             calc_frames(anm)
 
-    return 0
-
-def abs2ei_rotations():
-    active_model : CModel = bpy.types.Scene.model
-    lnk = active_model.links.links
+def abs2ei_rotations(links: CLink, animations: CAnimations):
+    lnk = links.links
 
     def calc_frames(part : CAnimation):
-        nonlocal lnk
-        
         if lnk[part.name] is None:
             return
         
         for i in range(len(part.rotations)):
-            parent_rot = cp.deepcopy(active_model.animation(lnk[part.name]).abs_rotation[i])
+            parent_rot = cp.deepcopy(animations.get_animation(lnk[part.name]).abs_rotation[i])
             parent_rot_invert = parent_rot.inverted().copy()
             parent_rot_invert.rotate(part.abs_rotation[i])
             part.rotations[i] = parent_rot_invert.copy()
     
     for part in lnk.keys():
-        anm = active_model.animation(part)
+        anm = animations.get_animation(part)
         if anm is None:
             print('animation for ' + part + ' not found')
         else:
             calc_frames(anm)
 
-def abs2Blender_rotations():
+def abs2Blender_rotations(links: CLink, animations: CAnimations):
     """
     Calculates rotation from absolute to Blender
     """
-    active_model : CModel = bpy.types.Scene.model
-    lnk = active_model.links.links
+    lnk = links.links
 
     def calc_frames(part : CAnimation):
-        nonlocal lnk
-        
         if lnk[part.name] is None:
             return
         
         for i in range(len(part.rotations)):
-            parent_rot = cp.deepcopy(active_model.animation(lnk[part.name]).abs_rotation[i])
+            parent_rot = cp.deepcopy(animations.get_animation(lnk[part.name]).abs_rotation[i])
             parent_rot_invert = parent_rot.inverted().copy()
             child_rot : Quaternion = parent_rot.copy()
             child_rot.rotate(part.rotations[i])
@@ -199,26 +190,23 @@ def abs2Blender_rotations():
             part.rotations[i].rotate(parent_rot_invert)
     
     for part in lnk.keys():
-        anm = active_model.animation(part)
+        anm = animations.get_animation(part)
         if anm is None:
             print('animation for ' + part + ' not found')
         else:
             calc_frames(anm)
 
-def blender2abs_rotations():
-    active_model : CModel = bpy.types.Scene.model
-    lnk = active_model.links.links
+def blender2abs_rotations(links: CLink, animations: CAnimations):
+    lnk = links.links
     #TODO: check if links correctly (None parent has only 1 obj and other)
-    if not active_model.links:
-        return 1
+    if not links:
+        raise Exception("Error: empty links")
 
     def calc_frames(part : CAnimation):
-        nonlocal lnk
-        
         if lnk[part.name] is None: #root object
             part.abs_rotation = cp.deepcopy(part.rotations)
         else:
-            parent_anm = active_model.animation(lnk[part.name])
+            parent_anm = animations.get_animation(lnk[part.name])
             if len(parent_anm.abs_rotation) == 0:
                 calc_frames(parent_anm)
             part.abs_rotation = cp.deepcopy(part.rotations)
@@ -226,7 +214,7 @@ def blender2abs_rotations():
                 part.abs_rotation[i].rotate(parent_anm.abs_rotation[i])
     
     for part in lnk.keys():
-        anm = active_model.animation(part)
+        anm = animations.get_animation(part)
         if anm is None:
             print('animation for ' + part + ' not found')
         else:
@@ -312,7 +300,9 @@ def clear_animation_data():
     base_rotation = Quaternion((1, 0, 0, 0))
     bpy.context.scene.frame_set(0)
     model : CModel = bpy.types.Scene.model
-    for obj in bpy.data.objects:
+
+    coll = bpy.data.collections.get("base")
+    for obj in coll.objects:
         if model.is_morph_name(obj.name):
             continue
         obj.rotation_mode = 'QUATERNION'
@@ -331,7 +321,7 @@ def insert_keyframe(sk, f):
     sk.value = 1.0
     sk.keyframe_insert("value", frame=f)   
 
-def insert_animation(anm_list : list[CAnimation]):
+def insert_animation(anm_list : CAnimations):
     err = 0
     clear_animation_data()
 
@@ -377,8 +367,9 @@ def set_res_file_buffer(index, value):
     setattr(bpy.context.scene, 'res_file_buffer%d' % index, value)
 
 def collect_animations():
-    active_model : CModel = bpy.types.Scene.model
-    for obj in bpy.data.objects:
+    anm_list = []
+    coll = bpy.data.collections.get("base")
+    for obj in coll.objects:
         if obj.name[0:2] in bpy.types.Scene.model.morph_comp.values():
             continue #skip morphed objects
 
@@ -413,12 +404,13 @@ def collect_animations():
             basis_block = obj.data.shape_keys.key_blocks['basis']
             block = obj.data.shape_keys.key_blocks[str(frame)]
             if block.value != 1.0:
-                print(f'{obj.name} incorrect moorph value')
+                print(f'{obj.name} incorrect morph value')
             
             for i in range(len(block.data)):
                 anm.morphations[frame].append(subVector(block.data[i].co, basis_block.data[i].co))
 
-        active_model.anm_list.append(anm)
+        anm_list.append(anm)
+    return CAnimations(anm_list)
 
 
 
@@ -521,7 +513,7 @@ def collect_links():
     lnk_ordered : dict[str, str] = dict()
     parts_ordered(lnk.links, lnk_ordered, lnk.root)
     lnk.links = lnk_ordered
-    model().links = lnk
+    return lnk
 
 def collect_pos():
     err = 0
