@@ -59,6 +59,7 @@ bl_operators = (
     operators.CAutoFillMorph_OP_Operator,
     operators.CAnimation_OP_shapekey,
     operators.CClear_OP_operator,
+    operators.CRenameDropPostfix_OP_operator,
 )
 
 import importlib

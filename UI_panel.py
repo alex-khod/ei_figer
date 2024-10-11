@@ -72,6 +72,7 @@ class OPERATOR_PT_PANEL(bpy.types.Panel):
 #        row = layout.split()
 #        left = split.column()
         left.prop(context.scene, 'figcopy_parent')
+        layout.operator('object.rename_drop_postfix', text='Drop .001 name part')
         row = layout.split()
         split = split.column()
         split = row.split(factor=1.2)

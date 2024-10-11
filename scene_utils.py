@@ -18,7 +18,7 @@ import copy
 from math import sqrt
 from mathutils import Quaternion, Vector, Matrix
 import copy as cp
-import collections
+import collections as py_collections
 
 from . utils import subVector, sumVector, CItemGroupContainer, mulVector, sumVector
 from . bone import CBone
@@ -30,6 +30,12 @@ from . links import CLink
 
 def model() -> CModel:
     return bpy.context.scene.model
+
+def get_base_collection():
+    model: CModel = bpy.context.scene.model
+    coll_name = model.morph_collection[0]
+    collection = bpy.data.collections.get(coll_name)
+    return collection
 
 def read_links(lnk_res : ResFile, lnk_name : str):
     active_model : CModel = bpy.types.Scene.model
@@ -140,9 +146,6 @@ def ei2abs_rotations(links: CLink, animations: CAnimations):
             part.abs_rotation = cp.deepcopy(parent_anm.abs_rotation)
             for i in range(len(part.rotations)):
                 part.abs_rotation[i].rotate(part.rotations[i])
-
-    print(animations)
-    print(animations.get_animation("head"))
 
     for part in lnk.keys():
         anm = animations.get_animation(part)
@@ -373,7 +376,7 @@ def collect_animations():
         if obj.name[0:2] in bpy.types.Scene.model.morph_comp.values():
             continue #skip morphed objects
 
-        if obj.animation_data is None:
+        if obj.animation_data is None and (not obj.data.shape_keys):
             continue
 
         anm = CAnimation()
@@ -429,24 +432,22 @@ def create_hierarchy(links : dict[str, str]):
 
 def is_model_correct():
     obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
+    print(obj_count)
     collections = bpy.context.scene.collection.children
     if len(collections) < 0:
         print('scene empty')
         return False
 
-    if collections[0].name != model().morph_collection[0]:
-        print('invalid scene name, must be \"' + model().morph_collection[0] + '\"')
+    for coll_name in model().morph_collection:
+        if bpy.data.collections.get(coll_name) is None:
+            print('no "%s" collection found ' % coll_name)
     bEtherlord = bpy.context.scene.ether
-
-    #if len(collections) != obj_count and not bEtherlord:
-    if len(collections) != obj_count:
-        print('collection number must correspond Model type count (now: '+ str(obj_count) +')')
-        return False
 
     root_list = []
 
+    base_coll = get_base_collection()
     #check if root object only 1
-    for obj in collections[0].objects:
+    for obj in base_coll.objects:
         if obj.type != 'MESH':
             continue
         
@@ -457,9 +458,11 @@ def is_model_correct():
         if mesh.uv_layers.active_index < 0:
             print('mesh ' + mesh.name + ' has no active uv layer (UV map)')
             return False
-        
+
+
         for i in range(obj_count):
-            if (model().morph_comp[i] + obj.name) not in collections[i].objects:
+            morph_coll = bpy.data.collections.get(model().morph_collection[i])
+            if (model().morph_comp[i] + obj.name) not in morph_coll.objects:
                 print('cannot find object: ' + model().morph_comp[i] + obj.name)
                 return False
 
@@ -467,7 +470,7 @@ def is_model_correct():
         print('incorrect root objects, must be only one, exist: ' + str(root_list))
 
     #check assembly name
-    for obj in collections[0].objects:
+    for obj in base_coll.objects:
         if obj.name == model().name:
             print(f'object {obj.name} must not be the same as model name. input another name for model or object')
             return False
@@ -490,7 +493,7 @@ def parts_ordered(links : dict[str, str], links_out : dict[str, str], root):
             candidates[child] = parent
 
     #alphabetical dict sort
-    od = collections.OrderedDict(sorted(candidates.items()))
+    od = py_collections.OrderedDict(sorted(candidates.items()))
     #len(key) dict sort
     new_d = {}
     for k in sorted(od, key=len):
@@ -503,9 +506,9 @@ def parts_ordered(links : dict[str, str], links_out : dict[str, str], root):
 
 def collect_links():
     lnk = CLink()
-    collections = bpy.context.scene.collection.children
+    base_coll = get_base_collection()
 
-    for obj in collections[0].objects:
+    for obj in base_coll.objects:
         if obj.type != 'MESH':
             continue
         lnk.add(obj.name, obj.parent.name if obj.parent is not None else None)
@@ -518,15 +521,16 @@ def collect_links():
 def collect_pos():
     err = 0
     obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
-    collections = bpy.context.scene.collection.children
+    base_coll = get_base_collection()
     #model().pos_list.clear()
-    for obj in collections[0].objects:
+    for obj in base_coll.objects:
         if obj.type != 'MESH':
             continue
         bone = CBone()
         for i in range(obj_count):
+            morph_coll = bpy.data.collections.get(model().morph_collection[i])
             #TODO: if object has no this morph comp, use previous components (end-point: base)
-            morph_obj = collections[i].objects[model().morph_comp[i] + obj.name]
+            morph_obj = morph_coll.objects[model().morph_comp[i] + obj.name]
             bone.pos.append(morph_obj.location[:])
             #print(str(obj.name) + '.bonename, objcount' + str(obj_count) + ' loc ' + str(morph_obj.location[:]))
        
@@ -542,11 +546,11 @@ def collect_mesh():
     err = 0
     item = CItemGroupContainer().get_item_group(model().name)
     obj_count = item.morph_component_count
-    collections = bpy.context.scene.collection.children
+    base_coll = get_base_collection()
 
     individual_group=['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left', 'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
 
-    for obj in collections[0].objects:
+    for obj in base_coll.objects:
         if obj.type != 'MESH':
             continue
         figure = CFigure()
@@ -559,7 +563,8 @@ def collect_mesh():
             figure.header[8] = item.t_number
         for i in range(obj_count):
             #TODO: if object has no this morph comp, use previous components (end-point: base)
-            morph_mesh : bpy.types.Mesh = collections[i].objects[model().morph_comp[i] + obj.name].data
+            morph_coll = bpy.data.collections.get(model().morph_collection[i])
+            morph_mesh : bpy.types.Mesh = morph_coll.objects[model().morph_comp[i] + obj.name].data
 
             count_vert = 0
             count_norm = 0
@@ -965,54 +970,135 @@ def animation_to_shapekey(context):
 # set location
 # obj.location = (0, 0, 0)
 
-def bake_transform_one(object, context):
-    donor = object
+# def rebase_animation(obj):
+#     if obj is None:
+#         raise Exception("Error: null object to bake")
+#
+#     #bpy.context.view_layer.objects.active = obj
+#     #bpy.ops.object.transform_apply(location=True, rotation=True)
+#
+#     # Bake the current animation
+#     bpy.ops.nla.bake(frame_start=bpy.context.scene.frame_start,
+#                      frame_end=bpy.context.scene.frame_end,
+#                      only_selected=False,
+#                      visual_keying=True,
+#                      clear_constraints=False,
+#                      use_current_action=True)
 
+def select_collection(coll_name, append_selection=False):
+    coll = bpy.data.collections.get(coll_name)
+    if not append_selection:
+        bpy.ops.object.select_all(action='DESELECT')
+    for obj in coll.objects:
+        obj.select_set(True)
+
+def duplicate_collection(coll_name, copy_to):
+    bpy.ops.outliner.select_all(action='DESELECT')
+    coll = bpy.data.collections.get(coll_name)
+    coll.select_set(True)
+    bpy.ops.outliner.collection_duplicate()
+
+    # # new collection
+    # new_coll = bpy.data.collections.new(copy_to)
+    # bpy.context.scene.collection.children.link(new_coll)
+    #
+    # for obj in coll.objects:
+    #     # copy object
+    #     new_obj = obj.copy()
+    #     new_obj.data = obj.data.copy()
+    #     new_coll.objects.link(new_obj)
+    #     # for collection in obj.users_collection:
+    #     #     collection.objects.unlink(new_obj)
+
+def copy_collection(coll_name, copy_to):
+    # new collection
+    new_coll = bpy.data.collections.new(copy_to)
+    bpy.context.scene.collection.children.link(new_coll)
+
+    # move objects
+    new_index = len(bpy.context.scene.collection.children)
+    bpy.ops.object.select_all(action='DESELECT')
+    select_collection(coll_name)
+    bpy.ops.object.duplicate_move_linked(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'})
+    bpy.ops.object.move_to_collection(collection_index=new_index)
+
+def report_info(message, title="Note", icon="INFO"):
+    bpy.context.window_manager.popup_menu(lambda self, context: self.layout.label(text=message),
+                                          title=title, icon=icon)
+
+def bake_transform_animation(context):
+    # create a copy of object -> acceptor
+    # for every animation frame:
+    # create additional copy of object, apply-transform it and make it a shapekey for acceptor
+    # remove original
+
+    selected = context.selected_objects.copy()
+    bpy.ops.object.select_all(action='DESELECT')
+
+    skipped = []
+    to_process = []
+    for obj in selected:
+        if obj.data.shape_keys:
+            skipped.append(obj.name)
+            print(f"Skipped {obj.name} - already has shapekey animation")
+            continue
+        to_process.append(obj)
+        obj.select_set(True)
+
+    report_info(f"Skipped {skipped} - already has shapekey animation", icon="QUESTION")
+
+    # prepare
+    context.scene.frame_set(999)
+    pairs = []
+    for obj in to_process:
+        donor, acceptor = bake_make_acceptor(context, obj)
+        pairs.append((donor, acceptor))
+    # main run
+    frames = list(range(context.scene.frame_start, context.scene.frame_end + 1))
+    for frame in frames:
+        context.scene.frame_set(frame)
+        for donor, acceptor in pairs:
+            bake_transform_animation_frame(context, donor, acceptor, frame)
+    # remove donor
+    for donor, acceptor in pairs:
+        acceptor.name = donor.name
+        bpy.data.objects.remove(donor, do_unlink=True)
+
+def bake_make_acceptor(context, donor):
     # for coll in bpy.data.collections["body"]:
     acceptor = donor.copy()
     acceptor.data = donor.data.copy()
     acceptor.animation_data_clear()
-    context.collection.objects.link(acceptor)
-
     acceptor.shape_key_clear()
+
+    for collection in donor.users_collection:
+        collection.objects.link(acceptor)
 
     # apply transforms
     bpy.ops.object.select_all(action='DESELECT')
     acceptor.select_set(True)
+    # clear initial transform
+    bpy.ops.object.rotation_clear()
+    bpy.ops.object.location_clear()
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    acceptor.shape_key_add(name='basis', from_mix=False)
+    return donor, acceptor
+
+def bake_transform_animation_frame(context, donor, acceptor, frame):
+    frame_donor = donor.copy()
+    frame_donor.data = donor.data.copy()
+    frame_donor.animation_data_clear()
+    context.collection.objects.link(frame_donor)
+
+    # apply transforms on selected objects
+    bpy.ops.object.select_all(action='DESELECT')
+    frame_donor.select_set(True)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-    acceptor.shape_key_add(name='basis', from_mix=False)
-    frames = list(range(context.scene.frame_start, context.scene.frame_end + 1))
-    for frame in frames:
-        context.scene.frame_set(frame)
-
-        frame_donor = donor.copy()
-        frame_donor.data = donor.data.copy()
-        frame_donor.animation_data_clear()
-        context.collection.objects.link(frame_donor)
-        context.view_layer.objects.active = frame_donor
-
-        # apply transforms
-        bpy.ops.object.select_all(action='DESELECT')
-        frame_donor.select_set(True)
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
-        new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
-        donor_verts = frame_donor.data.vertices
-        for i, vertex in enumerate(donor_verts):
-            vertex: bmesh.types.BMVert
-            new_key.data[i].co = vertex.co
-        insert_keyframe(new_key, frame)
-
-        context.collection.objects.unlink(frame_donor)
-
-    # remove donor
-    name = donor.name
-    bpy.data.objects.remove(donor)
-    acceptor.name = name
-
-def animation_bake_transform(context: bpy.types.Context):
-    selected = context.selected_objects.copy()
-    for object in selected:
-        print(object)
-        bake_transform_one(object, context)
+    new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
+    donor_verts = frame_donor.data.vertices
+    for i, vertex in enumerate(donor_verts):
+        vertex: bmesh.types.BMVert
+        new_key.data[i].co = vertex.co
+    insert_keyframe(new_key, frame)
+    bpy.data.objects.remove(frame_donor, do_unlink=True)

@@ -16,6 +16,7 @@ import importlib
 import bpy
 import os
 import io
+import time
 from bpy_extras.io_utils import ImportHelper
 from . import scene_utils
 from . figure import CFigure
@@ -25,7 +26,12 @@ from . utils import *
 from . scene_management import CModel
 from . resfile import ResFile
 from . scene_utils import *
-    
+
+def get_duration(fn):
+    start_time = time.time()
+    fn()
+    duration = time.time() - start_time
+    return duration
 
 class CRefreshTestTable(bpy.types.Operator):
     bl_label = 'EI refresh test unit'
@@ -912,8 +918,8 @@ class CAnimation_OP_import(bpy.types.Operator):
 class CAnimation_OP_shapekey(bpy.types.Operator):
     bl_label = 'Shapekey animation Operator'
     bl_idname = 'object.animation_shapekey'
-    bl_description = "Select two models, first Donor then Acceptor. " \
-                     "Donor's vertex animation will be transferred as shapekeys to " \
+    bl_description = "Select two models, first Donor then Acceptor.\n" \
+                     "Donor's vertex animation will be transferred as shapekeys to\n" \
                      "Acceptor."
 
     def execute(self, context):
@@ -928,23 +934,30 @@ class CAnimation_OP_shapekey(bpy.types.Operator):
 class CAnimation_OP_BakeTransform(bpy.types.Operator):
     bl_label = 'Bake transform operator'
     bl_idname = 'object.animation_bake_transform'
-    bl_description = 'For each object in selection, moves location' \
-                     ' / rotation / scale animation into shapekeys'
+    bl_description = 'For each object in selection, moves location / rotation / scale\n' \
+                     'animation into shapekeys ignores objects with shapekeys (morph animation)'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing bake transform')
+        selected = context.selected_objects
+
+        if not selected:
+            self.report({'ERROR'}, 'No object selected')
+            return {"CANCELLED"}
 
         importlib.reload(scene_utils)
-        scene_utils.animation_bake_transform(context)
+        duration = get_duration(lambda : scene_utils.bake_transform_animation(context))
 
-        self.report({'INFO'}, 'Done')
+        self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
 
 
 class CAnimation_OP_Export(bpy.types.Operator):
     bl_label = 'EI animation export Operator'
     bl_idname = 'object.animation_export'
-    bl_description = 'Export Animations for model'
+    bl_description = 'Export Animations for model\n' \
+                     'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
+                     'otherwise you\'ll get broken animation ingame'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation export')
@@ -1009,6 +1022,24 @@ class CAnimation_OP_Export(bpy.types.Operator):
 
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
+
+class CRenameDropPostfix_OP_operator(bpy.types.Operator):
+    bl_label = 'EI model export Operator'
+    bl_idname = 'object.rename_drop_postfix'
+    bl_description = 'Rename selected objects as to drop .001 etc from the names'
+
+    def execute(self, context):
+        if not bpy.context.selected_objects:
+            self.report({'ERROR'}, 'No object selected')
+            return {"CANCELLED"}
+        self.report({'INFO'}, 'Executing rename - drop postifx')
+        for obj in bpy.context.selected_objects:
+            name = obj.name.split('.')[0]
+            obj.name = name
+        self.report({'INFO'}, 'Done!')
+        return {"FINISHED"}
+
+
         
 class CExport_OP_operator(bpy.types.Operator):
     bl_label = 'EI model export Operator'
@@ -1039,7 +1070,7 @@ class CExport_OP_operator(bpy.types.Operator):
         if not is_model_correct():
             self.report({'ERROR'}, 'Model/Figure cannot pass check. \nSee System Console (Window->Toggle System Console)')
             return {'CANCELLED'}
-        collect_links()
+        links = collect_links()
         active_model.pos_list.clear()
         collect_pos()
         collect_mesh()
@@ -1048,7 +1079,7 @@ class CExport_OP_operator(bpy.types.Operator):
         if obj_count == 1: # save lnk,fig,bon into res (without model resfile)
             with ResFile(res_path, 'a') as res:
                 with res.open(active_model.name + '.lnk', 'w') as file:
-                    data = active_model.links.write_lnk()
+                    data = links.write_lnk()
                     file.write(data)
             #write figs
             with ResFile(res_path, 'a') as res:
@@ -1070,7 +1101,7 @@ class CExport_OP_operator(bpy.types.Operator):
             with ResFile(model_res, 'w') as res:
                 # write lnk
                 with res.open(active_model.name, 'w') as file:
-                    data = active_model.links.write_lnk()
+                    data = links.write_lnk()
                     file.write(data)
                 #write meshes
                 for part in active_model.mesh_list:
