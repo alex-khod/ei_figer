@@ -869,7 +869,7 @@ class CImport_OP_operator(bpy.types.Operator):
         return {'FINISHED'}
 
 class CAnimation_OP_import(bpy.types.Operator):
-    bl_label = 'EI animation import Operator'
+    bl_label = 'Import into %s collection'
     bl_idname = 'object.animation_import'
     bl_description = 'Import Animations for model'
 
@@ -879,11 +879,11 @@ class CAnimation_OP_import(bpy.types.Operator):
         if not res_path or not os.path.exists(res_path):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
             return {'CANCELLED'}
-        
+
         anm_name = bpy.context.scene.animation_name
         model_name = bpy.context.scene.figmodel_name
         resFile = ResFile(res_path)
-        
+
         if not model_name:
             self.report({'ERROR'}, 'Model/Figure name is empty')
             return {'CANCELLED'}
@@ -892,72 +892,41 @@ class CAnimation_OP_import(bpy.types.Operator):
             self.report({'ERROR'}, 'Animation name is empty')
             return {'CANCELLED'}
 
-        #choosing model to load
-        if model_name+'.anm' not in resFile.get_filename_list():
+        # choosing model to load
+        if model_name + '.anm' not in resFile.get_filename_list():
             self.report({'ERROR'}, 'Animations set for ' + model_name + 'not found')
             return {'CANCELLED'}
 
         with resFile.open(model_name + '.anm') as animation_container:
             anm_res_file = ResFile(animation_container)
             anm_list = anm_res_file.get_filename_list()
-            if anm_name not in anm_list: #set of animations
-                self.report({'ERROR'}, 'Can not find ' + anm_name +\
-                    '\nAnimation list: ' + str(anm_list))
+            if anm_name not in anm_list:  # set of animations
+                self.report({'ERROR'}, 'Can not find ' + anm_name + \
+                            '\nAnimation list: ' + str(anm_list))
                 return {'CANCELLED'}
-        
+
+        # fix names for base collection being imported
+        scene_utils.rename_drop_postfix(get_collection("base").objects)
         animations = read_animations(resFile, model_name, anm_name)
-        links = collect_links() #Lost Soul - fix for rewrite animations after close file
+        links = collect_links()  # Lost Soul - fix for rewrite animations after close file
         ei2abs_rotations(links, animations)
         bAutofix = bpy.context.scene.animsubfix
-        if not bAutofix:     
+        if not bAutofix:
             abs2Blender_rotations(links, animations)
-        insert_animation(animations)
+
+        insert_into = anm_name if context.scene.is_animation_to_new_collection else "base"
+        insert_animation(insert_into, animations)
         self.report({'INFO'}, 'Done')
-        return {'FINISHED'}
-
-class CAnimation_OP_shapekey(bpy.types.Operator):
-    bl_label = 'Shapekey animation Operator'
-    bl_idname = 'object.animation_shapekey'
-    bl_description = "Select two models, first Donor then Acceptor.\n" \
-                     "Donor's vertex animation will be transferred as shapekeys to\n" \
-                     "Acceptor."
-
-    def execute(self, context):
-        self.report({'INFO'}, 'Executing shapekey')
-
-        importlib.reload(scene_utils)
-        scene_utils.animation_to_shapekey(context)
-
-        self.report({'INFO'}, 'Done')
-        return {'FINISHED'}
-
-class CAnimation_OP_BakeTransform(bpy.types.Operator):
-    bl_label = 'Bake transform operator'
-    bl_idname = 'object.animation_bake_transform'
-    bl_description = 'For each object in selection, moves location / rotation / scale\n' \
-                     'animation into shapekeys ignores objects with shapekeys (morph animation)'
-
-    def execute(self, context):
-        self.report({'INFO'}, 'Executing bake transform')
-        selected = context.selected_objects
-
-        if not selected:
-            self.report({'ERROR'}, 'No object selected')
-            return {"CANCELLED"}
-
-        importlib.reload(scene_utils)
-        duration = get_duration(lambda : scene_utils.bake_transform_animation(context))
-
-        self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
 
 
 class CAnimation_OP_Export(bpy.types.Operator):
-    bl_label = 'EI animation export Operator'
+    bl_label = 'Export as %s collection'
     bl_idname = 'object.animation_export'
-    bl_description = 'Export Animations for model\n' \
+    bl_description = 'Export animations for model from container Name\n' \
+                     'Uses scene frame begin/end\n' \
                      'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
-                     'otherwise you\'ll get broken animation ingame'
+                     'otherwise you\'ll get broken animation ingame\n'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation export')
@@ -977,9 +946,14 @@ class CAnimation_OP_Export(bpy.types.Operator):
         if not anm_name:
             self.report({'ERROR'}, 'Animation name is empty')
             return {'CANCELLED'}
-        
-        links = collect_links()
-        animations = collect_animations()
+
+        # fix names for collection being exported
+        scene_utils.rename_drop_postfix(get_collection(anm_name).objects)
+
+        context.scene.frame_start, context.scene.frame_end = scene_utils.get_collection_frame_range(anm_name)
+
+        links = collect_links(anm_name)
+        animations = collect_animations(anm_name)
         blender2abs_rotations(links, animations)
         abs2ei_rotations(links, animations)
 
@@ -1023,6 +997,42 @@ class CAnimation_OP_Export(bpy.types.Operator):
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
 
+class CAnimation_OP_shapekey(bpy.types.Operator):
+    bl_label = 'Shapekey animation Operator'
+    bl_idname = 'object.animation_shapekey'
+    bl_description = "Select two models, first Donor then Acceptor.\n" \
+                     "Donor's vertex animation will be transferred as shapekeys to\n" \
+                     "Acceptor."
+
+    def execute(self, context):
+        self.report({'INFO'}, 'Executing shapekey')
+
+        importlib.reload(scene_utils)
+        scene_utils.animation_to_shapekey(context)
+
+        self.report({'INFO'}, 'Done')
+        return {'FINISHED'}
+
+class CAnimation_OP_BakeTransform(bpy.types.Operator):
+    bl_label = 'Bake transform operator'
+    bl_idname = 'object.animation_bake_transform'
+    bl_description = 'For each object in selection, moves location / rotation / scale\n' \
+                     'animation into shapekeys ignores objects with shapekeys (morph animation)'
+
+    def execute(self, context):
+        self.report({'INFO'}, 'Executing bake transform')
+        selected = context.selected_objects
+
+        if not selected:
+            self.report({'ERROR'}, 'No object selected')
+            return {"CANCELLED"}
+
+        importlib.reload(scene_utils)
+        duration = get_duration(lambda : scene_utils.bake_transform_animation(context))
+
+        self.report({'INFO'}, f'Done in {duration:.2f} sec')
+        return {'FINISHED'}
+
 class CRenameDropPostfix_OP_operator(bpy.types.Operator):
     bl_label = 'EI model export Operator'
     bl_idname = 'object.rename_drop_postfix'
@@ -1033,9 +1043,7 @@ class CRenameDropPostfix_OP_operator(bpy.types.Operator):
             self.report({'ERROR'}, 'No object selected')
             return {"CANCELLED"}
         self.report({'INFO'}, 'Executing rename - drop postifx')
-        for obj in bpy.context.selected_objects:
-            name = obj.name.split('.')[0]
-            obj.name = name
+        scene_utils.rename_drop_postfix(context.selected_objects)
         self.report({'INFO'}, 'Done!')
         return {"FINISHED"}
 
@@ -1044,7 +1052,9 @@ class CRenameDropPostfix_OP_operator(bpy.types.Operator):
 class CExport_OP_operator(bpy.types.Operator):
     bl_label = 'EI model export Operator'
     bl_idname = 'object.model_export'
-    bl_description = 'Export Evil Islands Model/Figure file'
+    bl_description = 'Export Evil Islands Model/Figure file\n' \
+        'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
+        'otherwise you\'ll get broken animation ingame'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing export')

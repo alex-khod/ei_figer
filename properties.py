@@ -231,6 +231,11 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
         description='For transfer anim from armature.',
         default=False
     )
+    scene.is_animation_to_new_collection = bpy.props.BoolProperty(
+        name='Import into new collection',
+        description='If checked, duplicate base collection as new animation container',
+        default=False
+    )
     scene.model = CModel()
 
 def unregister_props():

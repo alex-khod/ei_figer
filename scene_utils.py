@@ -31,11 +31,17 @@ from . links import CLink
 def model() -> CModel:
     return bpy.context.scene.model
 
-def get_base_collection():
-    model: CModel = bpy.context.scene.model
-    coll_name = model.morph_collection[0]
-    collection = bpy.data.collections.get(coll_name)
+def get_collection(collection_name = "base"):
+    collection = bpy.data.collections.get(collection_name)
     return collection
+
+def rename_drop_postfix(objects):
+    # this works inconsistently
+    # for objects being renamed into existing name,
+    # sometimes name priority is either on new or old object's side
+    for obj in objects:
+        name = obj.name.split('.')[0]
+        obj.name = name
 
 def read_links(lnk_res : ResFile, lnk_name : str):
     active_model : CModel = bpy.types.Scene.model
@@ -324,7 +330,10 @@ def insert_keyframe(sk, f):
     sk.value = 1.0
     sk.keyframe_insert("value", frame=f)   
 
-def insert_animation(anm_list : CAnimations):
+def insert_animation(to_collection, anm_list : CAnimations):
+    if (to_collection != "base"):
+        copy_collection("base", to_collection)
+
     err = 0
     clear_animation_data()
 
@@ -369,9 +378,9 @@ def get_res_file_buffer(index):
 def set_res_file_buffer(index, value):
     setattr(bpy.context.scene, 'res_file_buffer%d' % index, value)
 
-def collect_animations():
+def collect_animations(collection_name="base"):
     anm_list = []
-    coll = bpy.data.collections.get("base")
+    coll = get_collection(collection_name)
     for obj in coll.objects:
         if obj.name[0:2] in bpy.types.Scene.model.morph_comp.values():
             continue #skip morphed objects
@@ -445,7 +454,7 @@ def is_model_correct():
 
     root_list = []
 
-    base_coll = get_base_collection()
+    base_coll = get_collection()
     #check if root object only 1
     for obj in base_coll.objects:
         if obj.type != 'MESH':
@@ -504,13 +513,14 @@ def parts_ordered(links : dict[str, str], links_out : dict[str, str], root):
         parts_ordered(links, links_out, child)
     
 
-def collect_links():
+def collect_links(collection_name="base"):
     lnk = CLink()
-    base_coll = get_base_collection()
+    base_coll = get_collection(collection_name)
 
     for obj in base_coll.objects:
         if obj.type != 'MESH':
             continue
+        print(obj.name)
         lnk.add(obj.name, obj.parent.name if obj.parent is not None else None)
 
     lnk_ordered : dict[str, str] = dict()
@@ -521,7 +531,7 @@ def collect_links():
 def collect_pos():
     err = 0
     obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
-    base_coll = get_base_collection()
+    base_coll = get_collection()
     #model().pos_list.clear()
     for obj in base_coll.objects:
         if obj.type != 'MESH':
@@ -546,7 +556,7 @@ def collect_mesh():
     err = 0
     item = CItemGroupContainer().get_item_group(model().name)
     obj_count = item.morph_component_count
-    base_coll = get_base_collection()
+    base_coll = get_collection()
 
     individual_group=['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left', 'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
 
@@ -1011,6 +1021,9 @@ def duplicate_collection(coll_name, copy_to):
     #     #     collection.objects.unlink(new_obj)
 
 def copy_collection(coll_name, copy_to):
+    # this works inconsistently, seems to break hierarchy
+    raise Exception("Not implemented")
+
     # new collection
     new_coll = bpy.data.collections.new(copy_to)
     bpy.context.scene.collection.children.link(new_coll)
@@ -1019,12 +1032,41 @@ def copy_collection(coll_name, copy_to):
     new_index = len(bpy.context.scene.collection.children)
     bpy.ops.object.select_all(action='DESELECT')
     select_collection(coll_name)
-    bpy.ops.object.duplicate_move_linked(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'})
+    bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'})
     bpy.ops.object.move_to_collection(collection_index=new_index)
 
 def report_info(message, title="Note", icon="INFO"):
     bpy.context.window_manager.popup_menu(lambda self, context: self.layout.label(text=message),
                                           title=title, icon=icon)
+
+def get_root_object(objects):
+    root_objects = []
+    for obj in objects:
+        if obj.parent is None:
+            root_objects.append(obj)
+    assert (len(root_objects) == 1)
+    return root_objects[0]
+
+def get_collection_frame_range(collection_name):
+    coll = get_collection(collection_name)
+    obj = get_root_object(coll.objects)
+
+    if not obj.animation_data or not obj.animation_data.action:
+        return None
+
+    action = obj.animation_data.action
+    frame_range = []
+
+    for fcurve in action.fcurves:
+        for keyframe in fcurve.keyframe_points:
+            frame_range.append(keyframe.co[0])
+
+    if frame_range:
+        start_frame = min(frame_range)
+        end_frame = max(frame_range)
+        return int(start_frame), int(end_frame)
+
+    return None
 
 def bake_transform_animation(context):
     # create a copy of object -> acceptor
@@ -1045,7 +1087,14 @@ def bake_transform_animation(context):
         to_process.append(obj)
         obj.select_set(True)
 
-    report_info(f"Skipped {skipped} - already has shapekey animation", icon="QUESTION")
+    if skipped:
+        report_info(f"Skipped {skipped} - already has shapekey animation", icon="QUESTION")
+
+    #collection_name = "base"
+    #frame_range = get_collection_frame_range(collection_name)
+    # if frame_range is None:
+    #     raise Exception(f"No animation detected for {collection_name} root object")
+    frame_range = context.scene.frame_start, context.scene.frame_end
 
     # prepare
     context.scene.frame_set(999)
@@ -1054,7 +1103,8 @@ def bake_transform_animation(context):
         donor, acceptor = bake_make_acceptor(context, obj)
         pairs.append((donor, acceptor))
     # main run
-    frames = list(range(context.scene.frame_start, context.scene.frame_end + 1))
+    frame_start, frame_end = frame_range
+    frames = list(range(frame_start, frame_end + 1))
     for frame in frames:
         context.scene.frame_set(frame)
         for donor, acceptor in pairs:
