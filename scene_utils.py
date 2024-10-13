@@ -16,6 +16,7 @@ import typing
 import bpy
 import bmesh
 import copy
+import io
 from math import sqrt
 from mathutils import Quaternion, Vector, Matrix
 import copy as cp
@@ -220,6 +221,88 @@ def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
     else:
         return None
     return True
+
+def export_model(context, res_path, model_name, include_meshes=None):
+    links = collect_links()
+
+    active_model: CModel = bpy.types.Scene.model
+    active_model.reset()
+    active_model.name = model_name
+
+    collect_pos(model_name, include_meshes)
+    collect_mesh(include_meshes)
+
+    obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
+    if obj_count == 1:  # save lnk,fig,bon into res (without model resfile)
+        with ResFile(res_path, 'a') as res:
+            with res.open(active_model.name + '.lnk', 'w') as file:
+                data = links.write_lnk()
+                file.write(data)
+        # write figs
+        with ResFile(res_path, 'a') as res:
+            for mesh in active_model.mesh_list:
+                mesh.name = model_name + mesh.name + '.fig'
+                with res.open(mesh.name, 'w') as file:
+                    data = mesh.write_fig()
+                    file.write(data)
+        # write bones
+        with ResFile(res_path, 'a') as res:
+            for bone in active_model.pos_list:
+                bone.name = model_name + bone.name + '.bon'
+                with res.open(bone.name, 'w') as file:
+                    data = bone.write_bon()
+                    file.write(data)
+    else:
+        # append data
+        initial_model = {}
+        initial_bone = {}
+        if include_meshes:
+            with ResFile(res_path, 'r') as res:
+                with res.open(active_model.name + '.mod', 'r') as file:
+                    with ResFile(file, 'r') as res2:
+                        for file2 in res2.get_filename_list():
+                            with res2.open(file2, 'r') as f2:
+                                initial_model[file2] = f2.read()
+                with res.open(active_model.name + '.bon', 'r') as file:
+                    with ResFile(file, 'r') as res2:
+                        for file2 in res2.get_filename_list():
+                            with res2.open(file2, 'r') as f2:
+                                initial_bone[file2] = f2.read()
+        # prepare links + figures (.mod file)
+        model_res = io.BytesIO()
+        with ResFile(model_res, 'w') as res:
+            for file2, data in initial_model.items():
+                with res.open(file2, 'w') as file:
+                    file.write(data)
+            # write lnk
+            with res.open(active_model.name, 'w') as file:
+                data = links.write_lnk()
+                file.write(data)
+            # write meshes
+            for part in active_model.mesh_list:
+                with res.open(part.name, 'w') as file:
+                    data = part.write_fig()
+                    file.write(data)
+
+        # prepare bons file (.bon file)
+        bone_res = io.BytesIO()
+        with ResFile(bone_res, 'w') as res:
+            for file2, data in initial_bone.items():
+                with res.open(file2, 'w') as file:
+                    file.write(data)
+
+            for part in active_model.pos_list:
+                with res.open(part.name, 'w') as file:
+                    data = part.write_bon()
+                    file.write(data)
+
+        with ResFile(res_path, 'a') as res:
+            with res.open(active_model.name + '.mod', 'w') as file:
+                file.write(model_res.getvalue())
+            with res.open(active_model.name + '.bon', 'w') as file:
+                file.write(bone_res.getvalue())
+
+        print('resfile ' + res_path + ' saved')
 
 
 def ei2abs_rotations(links: CLink, animations: CAnimations):
@@ -539,8 +622,8 @@ def create_hierarchy(links : dict[str, str]):
         else:
             print(str(key) + ': object not found in scene, but found in links of hierarchy')
 
-def is_model_correct():
-    obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
+def is_model_correct(model_name):
+    obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
     print(obj_count)
     collections = bpy.context.scene.collection.children
     if len(collections) < 0:
@@ -628,13 +711,15 @@ def collect_links(collection_name="base"):
     lnk.links = lnk_ordered
     return lnk
 
-def collect_pos():
+def collect_pos(model_name, include_meshes=None):
     err = 0
-    obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
+    obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
     base_coll = get_collection()
     #model().pos_list.clear()
     for obj in base_coll.objects:
         if obj.type != 'MESH':
+            continue
+        if include_meshes and obj.name not in include_meshes:
             continue
         bone = CBone()
         for i in range(obj_count):
@@ -652,7 +737,7 @@ def collect_pos():
         model().pos_list.append(bone)
     return err
 
-def collect_mesh():
+def collect_mesh(include_meshes=None):
     err = 0
     item = CItemGroupContainer().get_item_group(model().name)
     obj_count = item.morph_component_count
@@ -662,6 +747,8 @@ def collect_mesh():
 
     for obj in base_coll.objects:
         if obj.type != 'MESH':
+            continue
+        if include_meshes and obj.name not in include_meshes:
             continue
         figure = CFigure()
         obj_group = CItemGroupContainer().get_item_group(obj.name)

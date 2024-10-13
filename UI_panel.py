@@ -40,7 +40,7 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
         row = layout.split()
         row.prop(context.scene, 'auto_fix')
         row.prop(context.scene, 'ether')
-        row.operator('object.model_export', text='Export')
+        row.operator('object.model_export', text='Export').mesh_mask = context.scene.mesh_mask
         row = layout.row()
         row.operator('object.clear_scene', text='Clear scene')
 
