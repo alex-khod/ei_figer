@@ -765,8 +765,16 @@ class CClear_OP_operator(bpy.types.Operator):
         scene_clear()
         return {'FINISHED'}
 
+def get_name(cls, mesh_mask):
+    if mesh_mask:
+        text = str(len(mesh_mask.split(',')))
+    else:
+        base_coll = get_collection("base")
+        text = str(len(base_coll.objects)) if base_coll else "all"
+    return cls.bl_label % text
+
 class CImport_OP_operator(bpy.types.Operator):
-    bl_label = 'Import %d meshes'
+    bl_label = 'Import %s meshes'
     bl_idname = 'object.model_import'
     bl_description = 'Import Model/Figure from selected resfile into base collection.\n' \
                      'Imports meshes based on mesh mask.'
@@ -775,11 +783,7 @@ class CImport_OP_operator(bpy.types.Operator):
                                         default="",
                                         description="Comma-separated include list of mesh names")
 
-    @classmethod
-    def get_name(cls, mesh_mask):
-        if not mesh_mask:
-            return cls.bl_label % len(get_collection("base").objects)
-        return cls.bl_label % len(mesh_mask.split(','))
+    get_name = classmethod(get_name)
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing import model')
@@ -818,7 +822,7 @@ class CImport_OP_operator(bpy.types.Operator):
 
 
 class CExport_OP_operator(bpy.types.Operator):
-    bl_label = 'Export %d meshes'
+    bl_label = 'Export %s meshes'
     bl_idname = 'object.model_export'
     bl_description = 'Export Evil Islands Model/Figure file.\n' \
                      'Exports meshes based on mesh mask.\n' \
@@ -830,11 +834,7 @@ class CExport_OP_operator(bpy.types.Operator):
                                         default="",
                                         description="Comma-separated include list of mesh names")
 
-    @classmethod
-    def get_name(cls, mesh_mask):
-        if not mesh_mask:
-            return cls.bl_label % len(get_collection("base").objects)
-        return cls.bl_label % len(mesh_mask.split(','))
+    get_name = classmethod(get_name)
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing export')
