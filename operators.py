@@ -29,9 +29,9 @@ from . scene_utils import *
 
 def get_duration(fn):
     start_time = time.time()
-    fn()
+    res = fn()
     duration = time.time() - start_time
-    return duration
+    return res, duration
 
 class CRefreshTestTable(bpy.types.Operator):
     bl_label = 'EI refresh test unit'
@@ -478,27 +478,6 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
 
         return {'FINISHED'}
 
-def clear_old_morphs(obj_list):
-    scene = bpy.context.scene
-    collections = bpy.data.collections
-    if len(collections) == 1:
-        return False
-    for obj in obj_list:
-        if obj.type != 'MESH':
-            continue
-        for coll_name in model().morph_collection[1:]:
-            coll = collections.get(coll_name)
-            if not coll:
-                continue
-            for obj in coll.objects:
-                if obj.type != 'MESH':
-                    continue
-                coll = scene.collection.children[coll_name]
-                del_name = obj.name
-                #if (model().morph_comp[i] + obj.name) in coll.objects:
-                bpy.data.objects.remove(bpy.data.objects[del_name])
-    return True
-
 class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
     bl_label = 'AutoMorphing'
     bl_idname = 'object.automorphnew'
@@ -536,7 +515,7 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
         scn = scene
         scaled = scn.scaled
 
-        if clear_old_morphs(base_coll.objects):
+        if scene_utils.clear_old_morphs():
             self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
 
         for obj in base_coll.objects:
@@ -554,7 +533,7 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
                 morph_name = model().morph_comp[i]
                 if morph_name in coll.objects:
                     continue
-        # копируем меши
+                # копируем меши
                 #detect suitable obj
 
                 new_obj = obj.copy()
@@ -806,58 +785,13 @@ class CImport_OP_operator(bpy.types.Operator):
             self.report({'ERROR'}, 'Model/Figure name is empty')
             return {'CANCELLED'}
 
-        active_model : CModel = bpy.types.Scene.model
-        resFile = ResFile(res_path)
-        if (model_name + '.mod') in resFile.get_filename_list():
-            active_model.reset('fig')
-            active_model.name = model_name
-            read_model(resFile, model_name)
-#            if read_figSignature(resFile, model_name) == 8:          ##LostSoul
-            bEtherlord = bpy.context.scene.ether
-            if not bEtherlord:
-                read_bones(resFile, model_name)
-#                break
-            for fig in active_model.mesh_list:
-                create_mesh_2(fig)
-            create_links_2(active_model.links)
-            for bone in active_model.pos_list:
-                set_pos_2(bone)
-        elif (model_name + '.lnk') in resFile.get_filename_list():
-            # read lnk, fig, bone in source res file, not from .mod
-            active_model.reset('fig')
-            active_model.name = model_name
-            err = read_links(resFile, model_name + '.lnk')
-            renamed_dict = dict()
-            for part, parent in active_model.links.links.items():
-                if parent is None:
-                    renamed_dict[active_model.name + part] = None
-                else:
-                    renamed_dict[active_model.name + part] = active_model.name + parent
-            active_model.links.links = renamed_dict
-            if err == 0:
-                #read parts
-                for part in active_model.links.links.keys():
-                    if (part + '.fig') in resFile.get_filename_list():
-                        read_figure(resFile, part + '.fig')
-                        nnn = (active_model.mesh_list[-1].name.split(model_name)[1]).rsplit('.')[0] #TODO: nnn
-                        active_model.mesh_list[-1].name = nnn
-                    else:
-                        print(part + '.fig not found')
-                    
-                    if (part + '.bon') in resFile.get_filename_list():
-                        read_bone(resFile, part + '.bon')
-                    else:
-                        print(part + '.bon not found')
-            #RuntimeError('Stopping the script here')
-            for fig in active_model.mesh_list:
-                create_mesh_2(fig)
+        res_file = ResFile(res_path)
+        importlib.reload(scene_utils)
+        res, duration = get_duration(lambda: scene_utils.import_model(context, res_file, model_name))
 
-            create_links_2(active_model.links)
-            for bone in active_model.pos_list:
-                set_pos_2(bone)
-        else:
+        if res is None:
             item_list = list()
-            for name in resFile.get_filename_list():
+            for name in res_file.get_filename_list():
                 if name.lower().endswith('.mod') or name.lower().endswith('.lnk'):
                     item_list.append(name.rsplit('.')[0])
 
@@ -865,19 +799,114 @@ class CImport_OP_operator(bpy.types.Operator):
                 '\nItems list: ' + str(item_list))
             return {'CANCELLED'}
         
+        self.report({'INFO'}, f'Done in {duration:.2f} sec')
+        return {'FINISHED'}
+
+
+class CExport_OP_operator(bpy.types.Operator):
+    bl_label = 'EI model export Operator'
+    bl_idname = 'object.model_export'
+    bl_description = 'Export Evil Islands Model/Figure file\n' \
+                     'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
+                     'otherwise you\'ll get broken animation ingame'
+
+    def execute(self, context):
+        self.report({'INFO'}, 'Executing export')
+        res_path = bpy.context.scene.res_file
+        if not res_path:
+            self.report({'ERROR'}, 'res file empty')
+            return {'CANCELLED'}
+
+        model_name: bpy.props.StringProperty = bpy.context.scene.figmodel_name
+        if not model_name:
+            self.report({'ERROR'}, 'Model/Figure name is empty')
+            return {'CANCELLED'}
+
+        active_model: CModel = bpy.types.Scene.model
+        active_model.name = model_name
+        active_model.reset()
+
+        bAutofix = bpy.context.scene.auto_fix
+        if bAutofix:
+            auto_fix_scene()
+
+        if not is_model_correct():
+            self.report({'ERROR'},
+                        'Model/Figure cannot pass check. \nSee System Console (Window->Toggle System Console)')
+            return {'CANCELLED'}
+        links = collect_links()
+        active_model.pos_list.clear()
+        collect_pos()
+        collect_mesh()
+
+        obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
+        if obj_count == 1:  # save lnk,fig,bon into res (without model resfile)
+            with ResFile(res_path, 'a') as res:
+                with res.open(active_model.name + '.lnk', 'w') as file:
+                    data = links.write_lnk()
+                    file.write(data)
+            # write figs
+            with ResFile(res_path, 'a') as res:
+                for mesh in active_model.mesh_list:
+                    mesh.name = model_name + mesh.name + '.fig'
+                    with res.open(mesh.name, 'w') as file:
+                        data = mesh.write_fig()
+                        file.write(data)
+            # write bones
+            with ResFile(res_path, 'a') as res:
+                for bone in active_model.pos_list:
+                    bone.name = model_name + bone.name + '.bon'
+                    with res.open(bone.name, 'w') as file:
+                        data = bone.write_bon()
+                        file.write(data)
+        else:
+            # prepare links + figures (.mod file)
+            model_res = io.BytesIO()
+            with ResFile(model_res, 'w') as res:
+                # write lnk
+                with res.open(active_model.name, 'w') as file:
+                    data = links.write_lnk()
+                    file.write(data)
+                # write meshes
+                for part in active_model.mesh_list:
+                    with res.open(part.name, 'w') as file:
+                        data = part.write_fig()
+                        file.write(data)
+
+            # prepare bons file (.bon file)
+            bone_res = io.BytesIO()
+            with ResFile(bone_res, 'w') as res:
+                for part in active_model.pos_list:
+                    with res.open(part.name, 'w') as file:
+                        data = part.write_bon()
+                        file.write(data)
+
+            with ResFile(res_path, 'a') as res:
+                with res.open(active_model.name + '.mod', 'w') as file:
+                    file.write(model_res.getvalue())
+                with res.open(active_model.name + '.bon', 'w') as file:
+                    file.write(bone_res.getvalue())
+
+            print('resfile ' + res_path + ' saved')
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
 
 class CAnimation_OP_import(bpy.types.Operator):
     bl_label = 'Import into %s collection'
     bl_idname = 'object.animation_import'
-    bl_description = 'Import Animations for model'
+    bl_description = 'Import Animations for model\n' \
+                     'Uses \"base\" collection as template'
 
     def execute(self, context):
-        self.report({'INFO'}, 'Executing annimation import')
+        self.report({'INFO'}, 'Executing animation import')
+
         res_path = bpy.context.scene.res_file
         if not res_path or not os.path.exists(res_path):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
+            return {'CANCELLED'}
+
+        if not scene_utils.get_collection("base"):
+            self.report({'ERROR'}, 'No base collection exists in the scene.')
             return {'CANCELLED'}
 
         anm_name = bpy.context.scene.animation_name
@@ -924,7 +953,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
     bl_label = 'Export as %s collection'
     bl_idname = 'object.animation_export'
     bl_description = 'Export animations for model from container Name\n' \
-                     'Uses scene frame begin/end\n' \
+                     'Uses collection frame range frame begin/end\n' \
                      'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
                      'otherwise you\'ll get broken animation ingame\n'
 
@@ -948,12 +977,13 @@ class CAnimation_OP_Export(bpy.types.Operator):
             return {'CANCELLED'}
 
         # fix names for collection being exported
-        scene_utils.rename_drop_postfix(get_collection(anm_name).objects)
+        export_from_name = anm_name if context.scene.is_animation_to_new_collection else "base"
+        scene_utils.rename_drop_postfix(get_collection(export_from_name).objects)
 
-        context.scene.frame_start, context.scene.frame_end = scene_utils.get_collection_frame_range(anm_name)
+        context.scene.frame_start, context.scene.frame_end = scene_utils.get_collection_frame_range(export_from_name)
 
-        links = collect_links(anm_name)
-        animations = collect_animations(anm_name)
+        links = collect_links(export_from_name)
+        animations = collect_animations(export_from_name)
         blender2abs_rotations(links, animations)
         abs2ei_rotations(links, animations)
 
@@ -1017,18 +1047,21 @@ class CAnimation_OP_BakeTransform(bpy.types.Operator):
     bl_label = 'Bake transform operator'
     bl_idname = 'object.animation_bake_transform'
     bl_description = 'For each object in selection, moves location / rotation / scale\n' \
-                     'animation into shapekeys ignores objects with shapekeys (morph animation)'
+                     'animation into shapekeys ignores objects with shapekeys (morph animation)\n' \
+                     'Uses scene frame range'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing bake transform')
-        selected = context.selected_objects
+        # NOTE: context.selected_objects doesn't include invisible objects...
+        selected = context.view_layer.objects.selected
+        #selected = context.selected_objects
 
         if not selected:
             self.report({'ERROR'}, 'No object selected')
             return {"CANCELLED"}
 
         importlib.reload(scene_utils)
-        duration = get_duration(lambda : scene_utils.bake_transform_animation(context))
+        _, duration = get_duration(lambda : scene_utils.bake_transform_animation(context))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
@@ -1039,100 +1072,12 @@ class CRenameDropPostfix_OP_operator(bpy.types.Operator):
     bl_description = 'Rename selected objects as to drop .001 etc from the names'
 
     def execute(self, context):
-        if not bpy.context.selected_objects:
+        self.report({'INFO'}, 'Executing rename - drop postifx')
+        # NOTE: context.selected_objects doesn't include invisible objects...
+        selected = context.view_layer.objects.selected
+        if not selected:
             self.report({'ERROR'}, 'No object selected')
             return {"CANCELLED"}
-        self.report({'INFO'}, 'Executing rename - drop postifx')
-        scene_utils.rename_drop_postfix(context.selected_objects)
+        scene_utils.rename_drop_postfix(selected)
         self.report({'INFO'}, 'Done!')
         return {"FINISHED"}
-
-
-        
-class CExport_OP_operator(bpy.types.Operator):
-    bl_label = 'EI model export Operator'
-    bl_idname = 'object.model_export'
-    bl_description = 'Export Evil Islands Model/Figure file\n' \
-        'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
-        'otherwise you\'ll get broken animation ingame'
-
-    def execute(self, context):
-        self.report({'INFO'}, 'Executing export')
-        res_path = bpy.context.scene.res_file
-        if not res_path:
-            self.report({'ERROR'}, 'res file empty')
-            return {'CANCELLED'}
-
-        model_name : bpy.props.StringProperty = bpy.context.scene.figmodel_name
-        if not model_name:
-            self.report({'ERROR'}, 'Model/Figure name is empty')
-            return {'CANCELLED'}
-
-        active_model : CModel = bpy.types.Scene.model
-        active_model.name = model_name
-        active_model.reset()
-
-        bAutofix = bpy.context.scene.auto_fix
-        if bAutofix:
-            auto_fix_scene()
-
-
-        if not is_model_correct():
-            self.report({'ERROR'}, 'Model/Figure cannot pass check. \nSee System Console (Window->Toggle System Console)')
-            return {'CANCELLED'}
-        links = collect_links()
-        active_model.pos_list.clear()
-        collect_pos()
-        collect_mesh()
-        
-        obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
-        if obj_count == 1: # save lnk,fig,bon into res (without model resfile)
-            with ResFile(res_path, 'a') as res:
-                with res.open(active_model.name + '.lnk', 'w') as file:
-                    data = links.write_lnk()
-                    file.write(data)
-            #write figs
-            with ResFile(res_path, 'a') as res:
-                for mesh in active_model.mesh_list:
-                    mesh.name = model_name + mesh.name + '.fig'
-                    with res.open(mesh.name, 'w') as file:
-                        data = mesh.write_fig()
-                        file.write(data)
-            #write bones
-            with ResFile(res_path, 'a') as res:
-                for bone in active_model.pos_list:
-                    bone.name = model_name + bone.name + '.bon'
-                    with res.open(bone.name, 'w') as file:
-                        data = bone.write_bon()
-                        file.write(data)
-        else:
-            # prepare links + figures (.mod file)
-            model_res = io.BytesIO()
-            with ResFile(model_res, 'w') as res:
-                # write lnk
-                with res.open(active_model.name, 'w') as file:
-                    data = links.write_lnk()
-                    file.write(data)
-                #write meshes
-                for part in active_model.mesh_list:
-                    with res.open(part.name, 'w') as file:
-                        data = part.write_fig()
-                        file.write(data)
-            
-            #prepare bons file (.bon file)
-            bone_res = io.BytesIO()
-            with ResFile(bone_res, 'w') as res:
-                for part in active_model.pos_list:
-                    with res.open(part.name, 'w') as file:
-                        data = part.write_bon()
-                        file.write(data)
-
-            with ResFile(res_path, 'a') as res:
-                with res.open(active_model.name + '.mod', 'w') as file:
-                    file.write(model_res.getvalue())
-                with res.open(active_model.name + '.bon', 'w') as file:
-                    file.write(bone_res.getvalue())
-                
-            print('resfile ' + res_path + ' saved')
-        self.report({'INFO'}, 'Done')
-        return {'FINISHED'}

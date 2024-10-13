@@ -1,4 +1,5 @@
 # Copyright (c) 2022 konstvest
+import typing
 
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -20,7 +21,7 @@ from mathutils import Quaternion, Vector, Matrix
 import copy as cp
 import collections as py_collections
 
-from . utils import subVector, sumVector, CItemGroupContainer, mulVector, sumVector
+from . utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
 from . bone import CBone
 from . figure import CFigure
 from . resfile import ResFile
@@ -31,16 +32,25 @@ from . links import CLink
 def model() -> CModel:
     return bpy.context.scene.model
 
-def get_collection(collection_name = "base"):
+def get_collection(collection_name = "base") -> bpy.types.Collection:
     collection = bpy.data.collections.get(collection_name)
     return collection
 
+def force_rename(obj, name):
+    old_obj = bpy.data.objects.get(name)
+    count = 1
+    rename_old = f"{name}.{count:03d}"
+    while rename_old in bpy.data.objects:
+        count += 1
+        rename_old = f"{name}.{count:03d}"
+    old_obj.name = rename_old
+
 def rename_drop_postfix(objects):
-    # this works inconsistently
-    # for objects being renamed into existing name,
-    # sometimes name priority is either on new or old object's side
     for obj in objects:
         name = obj.name.split('.')[0]
+
+        if name in bpy.data.objects:
+            force_rename(bpy.data.objects.get(name), name)
         obj.name = name
 
 def read_links(lnk_res : ResFile, lnk_name : str):
@@ -106,7 +116,7 @@ def read_model(resFile : ResFile, model_name):
             if mesh_name == model_name:
                 err += read_links(mesh_list_res, mesh_name)
             else:
-                err == read_figure(mesh_list_res, mesh_name)
+                err += read_figure(mesh_list_res, mesh_name)
     return err
 
 def read_bones(resFile : ResFile, model_name):
@@ -131,6 +141,78 @@ def read_animations(resFile : ResFile, model_name : str, animation_name : str) -
                     anm.read_anm(part_name, part)
                     anm_list.append(anm)
     return CAnimations(anm_list)
+
+def import_mod_file(res_file, model_name):
+    print("reading mod")
+    active_model: CModel = bpy.types.Scene.model
+    active_model.reset('fig')
+    active_model.name = model_name
+
+    read_model(res_file, model_name)
+    #            if read_figSignature(resFile, model_name) == 8:          ##LostSoul
+    bEtherlord = bpy.context.scene.ether
+    if not bEtherlord:
+        read_bones(res_file, model_name)
+    #                break
+    item_group = CItemGroupContainer().get_item_group(active_model.name)
+    for fig in active_model.mesh_list:
+        create_mesh_2(fig, item_group)
+    create_links_2(active_model.links)
+    for bone in active_model.pos_list:
+        set_pos_2(bone)
+
+def import_lnk_fig_bon_files(res_file, model_name):
+    print("reading lnk")
+    active_model: CModel = bpy.types.Scene.model
+    active_model.reset('fig')
+    active_model.name = model_name
+
+    err = read_links(res_file, model_name + '.lnk')
+    renamed_dict = dict()
+    for part, parent in active_model.links.links.items():
+        if parent is None:
+            renamed_dict[active_model.name + part] = None
+        else:
+            renamed_dict[active_model.name + part] = active_model.name + parent
+    active_model.links.links = renamed_dict
+    if err == 0:
+        # read parts
+        for part in active_model.links.links.keys():
+            if (part + '.fig') in res_file.get_filename_list():
+                read_figure(res_file, part + '.fig')
+                nnn = (active_model.mesh_list[-1].name.split(model_name)[1]).rsplit('.')[0]  # TODO: nnn
+                active_model.mesh_list[-1].name = nnn
+            else:
+                print(part + '.fig not found')
+
+            if (part + '.bon') in res_file.get_filename_list():
+                read_bone(res_file, part + '.bon')
+            else:
+                print(part + '.bon not found')
+    # RuntimeError('Stopping the script here')
+    item_group = CItemGroupContainer().get_item_group(active_model.name)
+    for fig in active_model.mesh_list:
+        create_mesh_2(fig, item_group)
+
+    create_links_2(active_model.links)
+    for bone in active_model.pos_list:
+        set_pos_2(bone)
+
+def import_model(context, res_file, model_name):
+    base_coll = get_collection("base")
+    if base_coll:
+        for obj in get_collection("base").objects:
+            bpy.data.objects.remove(obj)
+    clear_old_morphs()
+
+    if (model_name + '.mod') in res_file.get_filename_list():
+        import_mod_file(res_file, model_name)
+    elif (model_name + '.lnk') in res_file.get_filename_list():
+        import_lnk_fig_bon_files(res_file, model_name)
+    else:
+        return None
+    return True
+
 
 def ei2abs_rotations(links: CLink, animations: CAnimations):
     """
@@ -231,7 +313,17 @@ def blender2abs_rotations(links: CLink, animations: CAnimations):
 
     return 0
 
-def create_mesh_2(figure:CFigure):
+def clear_old_morphs():
+    for coll_name in model().morph_collection[1:]:
+        coll = get_collection(coll_name)
+        if not coll:
+            continue
+        for obj in coll.objects:
+            bpy.data.objects.remove(obj)
+    return True
+
+
+def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     active_model : CModel = bpy.context.scene.model
     faces = []
     ftemp = [0, 0, 0]
@@ -240,9 +332,7 @@ def create_mesh_2(figure:CFigure):
         for ind in range(3):
             ftemp[ind] = figure.v_c[figure.indicies[i + ind]][0]
         faces.append([ftemp[0], ftemp[1], ftemp[2]])
-    
-    container = CItemGroupContainer()
-    item_group = container.get_item_group(active_model.name)
+
     bEtherlord = bpy.context.scene.ether
     if not bEtherlord:
         mesh_count = item_group.morph_component_count
@@ -253,6 +343,8 @@ def create_mesh_2(figure:CFigure):
         name = active_model.morph_comp[mesh_num] + figure.name
         base_mesh = bpy.data.meshes.new(name=name)
         base_obj = bpy.data.objects.new(name, base_mesh)
+        # assert new object has correct name
+        base_obj.name = name
         collection_name = active_model.morph_collection[mesh_num]
 #        print('name = ' + name)
         if collection_name in bpy.data.collections:
@@ -305,13 +397,13 @@ def create_links_2(link : CLink):
     
     return 0
 
-def clear_animation_data():
+def clear_animation_data(collection_name: str = "base"):
     base_rotation = Quaternion((1, 0, 0, 0))
     bpy.context.scene.frame_set(0)
     model : CModel = bpy.types.Scene.model
 
-    coll = bpy.data.collections.get("base")
-    for obj in coll.objects:
+    collection = get_collection(collection_name)
+    for obj in collection.objects:
         if model.is_morph_name(obj.name):
             continue
         obj.rotation_mode = 'QUATERNION'
@@ -330,12 +422,15 @@ def insert_keyframe(sk, f):
     sk.value = 1.0
     sk.keyframe_insert("value", frame=f)   
 
-def insert_animation(to_collection, anm_list : CAnimations):
-    if (to_collection != "base"):
+def insert_animation(to_collection : str, anm_list : CAnimations):
+    if not bpy.data.collections.get("base"):
+        raise Exception("No \"base\" collection exists!")
+    if not bpy.data.collections.get(to_collection) and to_collection != "base":
         copy_collection("base", to_collection)
 
-    err = 0
-    clear_animation_data()
+    rename_drop_postfix(get_collection(to_collection).objects)
+
+    clear_animation_data(to_collection)
 
     for part in anm_list:
         if part.name not in bpy.data.objects:
@@ -369,8 +464,7 @@ def insert_animation(to_collection, anm_list : CAnimations):
                 for i in range(len(part.morphations[frame])):
                     key.data[i].co = sumVector(obj.data.vertices[i].co, part.morphations[frame][i])
                 insert_keyframe(key, frame)
-
-    return err
+    return True
 
 def get_res_file_buffer(index):
     return getattr(bpy.context.scene, 'res_file_buffer%d' % index)
@@ -1002,54 +1096,50 @@ def select_collection(coll_name, append_selection=False):
     for obj in coll.objects:
         obj.select_set(True)
 
-def duplicate_collection(coll_name, copy_to):
-    bpy.ops.outliner.select_all(action='DESELECT')
-    coll = bpy.data.collections.get(coll_name)
-    coll.select_set(True)
-    bpy.ops.outliner.collection_duplicate()
+def copy_collection(copy_from_name, copy_to_name, name_prefix=None):
+    from_collection = bpy.data.collections.get(copy_from_name)
+    # make new collection
+    to_collection = bpy.data.collections.new(copy_to_name)
+    bpy.context.scene.collection.children.link(to_collection)
 
-    # # new collection
-    # new_coll = bpy.data.collections.new(copy_to)
-    # bpy.context.scene.collection.children.link(new_coll)
-    #
-    # for obj in coll.objects:
-    #     # copy object
-    #     new_obj = obj.copy()
-    #     new_obj.data = obj.data.copy()
-    #     new_coll.objects.link(new_obj)
-    #     # for collection in obj.users_collection:
-    #     #     collection.objects.unlink(new_obj)
+    # store old-new object links
+    prototypes = {}
+    def copy_recursive(copy_from, copy_to, parent=None):
+        for obj in copy_from:
+            new_obj = obj.copy()
+            new_obj.data = obj.data.copy()
+            if name_prefix:
+                new_obj.name = name_prefix + obj.name
+            copy_to.objects.link(new_obj)
 
-def copy_collection(coll_name, copy_to):
-    # this works inconsistently, seems to break hierarchy
-    raise Exception("Not implemented")
+            prototypes[new_obj.name] = obj.name
 
-    # new collection
-    new_coll = bpy.data.collections.new(copy_to)
-    bpy.context.scene.collection.children.link(new_coll)
+            new_obj.parent = parent
 
-    # move objects
-    new_index = len(bpy.context.scene.collection.children)
-    bpy.ops.object.select_all(action='DESELECT')
-    select_collection(coll_name)
-    bpy.ops.object.duplicate_move(OBJECT_OT_duplicate={"linked": False, "mode": 'TRANSLATION'})
-    bpy.ops.object.move_to_collection(collection_index=new_index)
+            if obj.children:
+                copy_recursive(obj.children, copy_to, parent=new_obj)
+
+    root_objects = get_root_objects(from_collection.objects, True)
+    copy_recursive(root_objects, to_collection)
+    return to_collection, prototypes
 
 def report_info(message, title="Note", icon="INFO"):
     bpy.context.window_manager.popup_menu(lambda self, context: self.layout.label(text=message),
                                           title=title, icon=icon)
 
-def get_root_object(objects):
+def get_root_objects(objects: typing.Sequence[bpy.types.Object], all=False):
     root_objects = []
     for obj in objects:
         if obj.parent is None:
             root_objects.append(obj)
+    if all:
+        return root_objects
     assert (len(root_objects) == 1)
     return root_objects[0]
 
 def get_collection_frame_range(collection_name):
     coll = get_collection(collection_name)
-    obj = get_root_object(coll.objects)
+    obj = get_root_objects(coll.objects)
 
     if not obj.animation_data or not obj.animation_data.action:
         return None

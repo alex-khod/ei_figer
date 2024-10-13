@@ -165,12 +165,12 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         #layout.label(text='Animations')
         layout.prop(context.scene, 'animation_name')
 
-        #layout.prop(context.scene, 'is_animation_to_new_collection')
+        layout.prop(context.scene, 'is_animation_to_new_collection')
 
         use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
         label = operators.CAnimation_OP_import.bl_label % use_collection
         layout.operator('object.animation_import', text=label)
-        label = operators.CAnimation_OP_Export.bl_label % context.scene.animation_name
+        label = operators.CAnimation_OP_Export.bl_label % use_collection
         layout.operator('object.animation_export', text=label)
         layout.prop(context.scene, 'animsubfix')
         layout.operator('object.animation_shapekey', text='Shapekey')
