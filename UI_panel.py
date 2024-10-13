@@ -36,11 +36,14 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
         layout.label(text=str(context.scene.res_file), icon='FILE_FOLDER')
         layout.prop(context.scene, 'figmodel_name')
         layout.prop(context.scene, 'mesh_mask')
-        layout.operator('object.model_import', text='Import').mesh_mask = context.scene.mesh_mask
+        mesh_mask = context.scene.mesh_mask
+        op_name = operators.CImport_OP_operator.get_name(mesh_mask)
+        layout.operator('object.model_import', text=op_name).mesh_mask = mesh_mask
         row = layout.split()
         row.prop(context.scene, 'auto_fix')
         row.prop(context.scene, 'ether')
-        row.operator('object.model_export', text='Export').mesh_mask = context.scene.mesh_mask
+        op_name = operators.CExport_OP_operator.get_name(mesh_mask)
+        layout.operator('object.model_export', text=op_name).mesh_mask = mesh_mask
         row = layout.row()
         row.operator('object.clear_scene', text='Clear scene')
 
@@ -180,13 +183,45 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         layout.separator()
         layout.operator('object.debug_test')
 
+
 def outliner_mt_collection(self : bpy.types.OUTLINER_MT_collection, context):
     layout = self.layout
-    self.layout.separator()
+    layout.separator()
     active_collection = context.view_layer.active_layer_collection
     active_collection_name = active_collection.name
     label = operators.CAnimation_OP_import.bl_label % active_collection_name
     layout.operator('object.animation_import', text=label).target_collection = active_collection_name
     label = operators.CAnimation_OP_Export.bl_label % active_collection_name
     layout.operator('object.animation_export', text=label).target_collection = active_collection_name
+
+
+def prepare_mesh_mask(context) -> str or None:
+    selected_objects = context.view_layer.objects.selected
+    base_coll = bpy.data.collections.get("base")
+
+    export_names = []
+    if not base_coll:
+        return None
+    for obj in selected_objects:
+        if obj.name in base_coll.objects:
+            export_names.append(obj.name)
+
+    mesh_mask = None
+    if export_names:
+        mesh_mask = ','.join(export_names)
+    return mesh_mask
+
+
+def outliner_mt_object(self : bpy.types.OUTLINER_MT_object, context):
+    layout = self.layout
+    mesh_mask = prepare_mesh_mask(context)
+
+    if not mesh_mask:
+        return
+
+    layout.separator()
+    label = operators.CImport_OP_operator.get_name(mesh_mask)
+    layout.operator('object.model_import', text=label).mesh_mask = mesh_mask
+    label = operators.CExport_OP_operator.get_name(mesh_mask)
+    layout.operator('object.model_export', text=label).mesh_mask = mesh_mask
 

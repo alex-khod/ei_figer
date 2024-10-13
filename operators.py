@@ -766,14 +766,20 @@ class CClear_OP_operator(bpy.types.Operator):
         return {'FINISHED'}
 
 class CImport_OP_operator(bpy.types.Operator):
-    bl_label = 'EI model import Operator'
+    bl_label = 'Import %d meshes'
     bl_idname = 'object.model_import'
-    bl_description = 'Import Model/Figure from selected resfile into base collection\n' \
-                     'imports meshes based on mesh mask.'
+    bl_description = 'Import Model/Figure from selected resfile into base collection.\n' \
+                     'Imports meshes based on mesh mask.'
 
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
                                         description="Comma-separated include list of mesh names")
+
+    @classmethod
+    def get_name(cls, mesh_mask):
+        if not mesh_mask:
+            return cls.bl_label % len(get_collection("base").objects)
+        return cls.bl_label % len(mesh_mask.split(','))
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing import model')
@@ -812,17 +818,23 @@ class CImport_OP_operator(bpy.types.Operator):
 
 
 class CExport_OP_operator(bpy.types.Operator):
-    bl_label = 'EI model export Operator'
+    bl_label = 'Export %d meshes'
     bl_idname = 'object.model_export'
     bl_description = 'Export Evil Islands Model/Figure file.\n' \
                      'Exports meshes based on mesh mask.\n' \
-                     '(The entire mesh tree still needs to be present in the scene to preserve model structure)\n' \
+                     '(the entire mesh tree still needs to be present in the scene to preserve model structure)\n' \
                      'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
                      'otherwise you\'ll get broken animation ingame'
 
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
                                         description="Comma-separated include list of mesh names")
+
+    @classmethod
+    def get_name(cls, mesh_mask):
+        if not mesh_mask:
+            return cls.bl_label % len(get_collection("base").objects)
+        return cls.bl_label % len(mesh_mask.split(','))
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing export')

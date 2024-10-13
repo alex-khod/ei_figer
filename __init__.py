@@ -65,6 +65,7 @@ bl_operators = (
 
 bl_menus = (
     (bpy.types.OUTLINER_MT_collection, UI_panel.outliner_mt_collection),
+    (bpy.types.OUTLINER_MT_object, UI_panel.outliner_mt_object),
 )
 
 def add_context_menu(self, operator_class):
@@ -102,6 +103,7 @@ def unregister():
     for oper in bl_operators:
         unregister_class(oper)
     for menu, menu_draw in bl_menus:
+        print("register menu", menu, menu_draw)
         menu.append(menu_draw)
 
     unregister_props()
