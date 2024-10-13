@@ -169,11 +169,23 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
 
         use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
         label = operators.CAnimation_OP_import.bl_label % use_collection
-        layout.operator('object.animation_import', text=label)
+        layout.operator('object.animation_import', text=label).target_collection = use_collection
         label = operators.CAnimation_OP_Export.bl_label % use_collection
-        layout.operator('object.animation_export', text=label)
+        layout.operator('object.animation_export', text=label).target_collection = use_collection
         layout.prop(context.scene, 'animsubfix')
         layout.operator('object.animation_shapekey', text='Shapekey')
         layout.prop(context.scene, 'skeletal')
         layout.operator('object.animation_bake_transform', text='Bake transform')
+        layout.separator()
+        layout.operator('object.debug_test')
+
+def outliner_mt_collection(self : bpy.types.OUTLINER_MT_collection, context):
+    layout = self.layout
+    self.layout.separator()
+    active_collection = context.view_layer.active_layer_collection
+    active_collection_name = active_collection.name
+    label = operators.CAnimation_OP_import.bl_label % active_collection_name
+    layout.operator('object.animation_import', text=label).target_collection = active_collection_name
+    label = operators.CAnimation_OP_Export.bl_label % active_collection_name
+    layout.operator('object.animation_export', text=label).target_collection = active_collection_name
 

@@ -23,7 +23,7 @@ bl_info = {
     'wiki_url': '',
     'tracker_url': 'https://github.com/konstvest/ei_figer',
     'category': 'Import-Export'}
-
+import bpy
 from . import UI_panel
 from . import operators
 from . properties import register_props, unregister_props
@@ -60,7 +60,15 @@ bl_operators = (
     operators.CAnimation_OP_shapekey,
     operators.CClear_OP_operator,
     operators.CRenameDropPostfix_OP_operator,
+    operators.CDebugTestOperator
 )
+
+bl_menus = (
+    (bpy.types.OUTLINER_MT_collection, UI_panel.outliner_mt_collection),
+)
+
+def add_context_menu(self, operator_class):
+    self.layout.menu(operator_class.bl_idname)
 
 import importlib
 
@@ -82,6 +90,8 @@ def register():
     for oper in bl_operators:
         print('reg operator: ' + str(oper))
         register_class(oper)
+    for menu, menu_draw in bl_menus:
+        menu.append(menu_draw)
 
     register_props()
     
@@ -91,6 +101,8 @@ def unregister():
         unregister_class(panel)
     for oper in bl_operators:
         unregister_class(oper)
+    for menu, menu_draw in bl_menus:
+        menu.append(menu_draw)
 
     unregister_props()
 

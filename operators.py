@@ -892,10 +892,15 @@ class CExport_OP_operator(bpy.types.Operator):
         return {'FINISHED'}
 
 class CAnimation_OP_import(bpy.types.Operator):
-    bl_label = 'Import into %s collection'
+    bl_label = 'Import animation into %s collection'
     bl_idname = 'object.animation_import'
     bl_description = 'Import Animations for model\n' \
                      'Uses \"base\" collection as template'
+
+    target_collection: bpy.props.StringProperty(
+        default="base",
+        options={'HIDDEN'},
+        maxlen=255,)
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation import')
@@ -943,19 +948,23 @@ class CAnimation_OP_import(bpy.types.Operator):
         if not bAutofix:
             abs2Blender_rotations(links, animations)
 
-        insert_into = anm_name if context.scene.is_animation_to_new_collection else "base"
-        insert_animation(insert_into, animations)
+        insert_animation(self.target_collection, animations)
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
 
 
 class CAnimation_OP_Export(bpy.types.Operator):
-    bl_label = 'Export as %s collection'
+    bl_label = 'Export animation as %s collection'
     bl_idname = 'object.animation_export'
     bl_description = 'Export animations for model from container Name\n' \
                      'Uses collection frame range frame begin/end\n' \
                      'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
-                     'otherwise you\'ll get broken animation ingame\n'
+                     'otherwise you\'ll get broken animation ingame'
+
+    target_collection: bpy.props.StringProperty(
+        default="base",
+        options={'HIDDEN'},
+        maxlen=255,)
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation export')
@@ -977,7 +986,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
             return {'CANCELLED'}
 
         # fix names for collection being exported
-        export_from_name = anm_name if context.scene.is_animation_to_new_collection else "base"
+        export_from_name = self.target_collection
         scene_utils.rename_drop_postfix(get_collection(export_from_name).objects)
 
         context.scene.frame_start, context.scene.frame_end = scene_utils.get_collection_frame_range(export_from_name)
@@ -1081,3 +1090,16 @@ class CRenameDropPostfix_OP_operator(bpy.types.Operator):
         scene_utils.rename_drop_postfix(selected)
         self.report({'INFO'}, 'Done!')
         return {"FINISHED"}
+
+
+# Define the custom operator
+class CDebugTestOperator(bpy.types.Operator):
+    bl_label = "Debug / Test"
+    bl_idname = "object.debug_test"
+    bl_description = "Do debug stuff"
+
+    def execute(self, context):
+
+        # tbd
+
+        return {'FINISHED'}
