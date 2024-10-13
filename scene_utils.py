@@ -405,13 +405,16 @@ def blender2abs_rotations(links: CLink, animations: CAnimations):
     return 0
 
 
-def clear_old_morphs(start_index=1):
-    for coll_name in model().morph_collection[start_index:]:
+def clear_old_morphs(start_index=1, include_meshes=None):
+    # base_meshes = set([obj.name for obj in get_collection("base").objects])
+    for coll_name, coll_prefix in zip(model().morph_collection[start_index:], model().morph_comp[start_index:]):
         coll = get_collection(coll_name)
         if not coll:
             continue
         for obj in coll.objects:
-            bpy.data.objects.remove(obj)
+            # or (coll_prefix + obj.name) not in base_meshes:
+            if (include_meshes and obj.name in include_meshes):
+                bpy.data.objects.remove(obj)
     return True
 
 
@@ -1215,6 +1218,90 @@ def copy_collection(copy_from_name, copy_to_name, name_prefix=None):
     root_objects = get_root_objects(from_collection.objects, True)
     copy_recursive(root_objects, to_collection)
     return to_collection, prototypes
+
+def create_all_morphs(context, include_meshes=None):
+    links = dict()
+    # Триангулируем и применяем модификаторы на базовой модели
+    bAutofix = context.scene.auto_apply
+    if bAutofix:
+        auto_fix_scene()
+
+    scn = scene = context.scene
+    scaled = scn.scaled
+
+    #clear_old_morphs(1, include_meshes)
+
+    base_coll = get_collection("base")
+    for obj in base_coll.objects:
+        if obj.type != 'MESH':
+            continue
+        links[obj.name] = obj.parent.name if obj.parent else None
+
+    ensure_morph_collections()
+
+    for obj in base_coll.objects:
+        if obj.type != 'MESH':
+            continue
+        if include_meshes and obj.name not in include_meshes:
+            continue
+        # добавляем коллекции
+        for i in range(1, 8):
+            coll_name = model().morph_collection[i]
+            coll = scene.collection.children[coll_name]
+            morph_name = model().morph_comp[i] + obj.name
+            if morph_name in coll.objects:
+                bpy.data.objects.remove(coll.objects.get(morph_name))
+            # копируем меши
+            #detect suitable obj
+            new_obj = obj.copy()
+            new_obj.name = morph_name
+            new_obj.data = obj.data.copy()
+            # all my homies hate animation
+            new_obj.animation_data_clear()
+            new_obj.shape_key_clear()
+            new_obj.data.name = new_obj.name
+            coll.objects.link(new_obj)
+            new_obj.select_set(False)
+
+    vectors = [
+        (scn.s_s_x, scn.s_s_y, scn.s_s_z),
+        (scn.s_d_x, scn.s_d_y, scn.s_d_z),
+        (scn.s_u_x, scn.s_u_y, scn.s_u_z),
+        (scn.scaled, scn.scaled, scn.scaled),
+        (scaled + scn.s_s_x - 1, scaled + scn.s_s_y - 1, scaled + scn.s_s_z - 1),
+        (scaled + scn.s_d_x - 1, scaled + scn.s_d_y - 1, scaled + scn.s_d_z - 1),
+        (scaled + scn.s_u_x - 1, scaled + scn.s_u_y - 1, scaled + scn.s_u_z - 1),
+    ]
+
+    for obj in bpy.context.selected_objects:
+        obj.select_set(False)
+
+    # привязываем родителей
+    for s in range(1, 8):
+        for child, parent in links.items():
+            if parent is None:
+                continue
+            bpy.data.objects[model().morph_comp[s] + child].parent = bpy.data.objects[
+                model().morph_comp[s] + parent]
+
+    #Трогаем только scaled коллекции
+    for s in range(1, 8):
+        for child, parent in links.items():
+            if parent is None:
+                bpy.data.objects[model().morph_comp[s] + child].scale = vectors[s - 1]
+
+    for obj in bpy.context.selected_objects:
+        obj.select_set(False)
+
+    for i in range(0, 8):
+        coll_name = model().morph_collection[i]
+        coll = bpy.data.collections.get(coll_name)
+        for obj in coll.objects:
+            if include_meshes and obj.name not in include_meshes:
+                continue
+            obj.select_set(True)
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+            obj.select_set(False)
 
 def report_info(message, title="Note", icon="INFO"):
     bpy.context.window_manager.popup_menu(lambda self, context: self.layout.label(text=message),

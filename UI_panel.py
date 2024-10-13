@@ -146,7 +146,10 @@ class OPERATORMASS_PT_PANEL(bpy.types.Panel):
         comp.operator('object.copytoscaled', text='Copy all to scaled')
         row = self.layout
         row = layout.split()
-        row.operator('object.automorphnew', text='Create all morps')
+
+        mesh_mask = context.scene.mesh_mask
+        op_name = operators.CAutoFillMorphNew_OP_Operator.get_name(mesh_mask)
+        row.operator('object.automorphnew', text=op_name).mesh_mask = mesh_mask
         row = layout.split()
         row.operator('object.fixpos', text='Fix positions')
        #automorph (in progress now)
@@ -224,4 +227,6 @@ def outliner_mt_object(self : bpy.types.OUTLINER_MT_object, context):
     layout.operator('object.model_import', text=label).mesh_mask = mesh_mask
     label = operators.CExport_OP_operator.get_name(mesh_mask)
     layout.operator('object.model_export', text=label).mesh_mask = mesh_mask
+    label = operators.CAutoFillMorphNew_OP_Operator.get_name(mesh_mask)
+    layout.operator('object.automorphnew', text=label).mesh_mask = mesh_mask
 

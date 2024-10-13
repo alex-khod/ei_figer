@@ -64,7 +64,7 @@ class CModel():
             ,5: 'p~' #power (scaled str)
             ,6: 'g~' #growth (scaled dex)
             ,7: 'c~' #common (scaled unique)
-            ,8: 'T~' #test unit
+            # ,8: 'T~' #test unit
         }
 
         self.morph_collection = [

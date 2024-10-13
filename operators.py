@@ -32,6 +32,14 @@ def get_duration(fn):
     duration = time.time() - start_time
     return res, duration
 
+def get_name(cls, mesh_mask):
+    if mesh_mask:
+        text = str(len(mesh_mask.split(',')))
+    else:
+        base_coll = get_collection("base")
+        text = str(len(base_coll.objects)) if base_coll else "all"
+    return cls.bl_label % text
+
 class CRefreshTestTable(bpy.types.Operator):
     bl_label = 'EI refresh test unit'
     bl_idname = 'object.refresh_test_unit'
@@ -478,14 +486,19 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
         return {'FINISHED'}
 
 class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
-    bl_label = 'AutoMorphing'
+    bl_label = 'Create morphs for %s meshes'
     bl_idname = 'object.automorphnew'
     bl_description = 'Generates morph components based on existing -base- collection' \
                      'if you have animation going on, transformations will break it' \
                      'so make a copy beforehand' \
 
-    def execute(self, context):
+    mesh_mask: bpy.props.StringProperty(name="Mesh mask",
+                                        default="",
+                                        description="Comma-separated include list of mesh names")
 
+    get_name = classmethod(get_name)
+
+    def execute(self, context):
         collections = bpy.data.collections
         base_coll = collections.get("base")
         if not base_coll:
@@ -502,86 +515,12 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
             return {'CANCELLED'}
+
+        mesh_mask = self.mesh_mask
+        mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
         
         clear_unlinked_data()
-        scene = bpy.context.scene
-        links = dict()
-        # Триангулируем и применяем модификаторы на базовой модели
-        bAutofix = bpy.context.scene.auto_apply
-        if bAutofix:
-            auto_fix_scene()
-
-        scn = scene
-        scaled = scn.scaled
-
-        scene_utils.clear_old_morphs()
-
-        for obj in base_coll.objects:
-            if obj.type != 'MESH':
-                continue
-            links[obj.name] = None if obj.parent is None else obj.parent.name
-        # добавляем коллекции
-            for i in range(1, 8):
-                coll_name = model().morph_collection[i]
-                if coll_name not in scene.collection.children:
-                    new_col = bpy.data.collections.new(coll_name)
-                    scene.collection.children.link(new_col)
-
-                coll = scene.collection.children[coll_name]
-                morph_name = model().morph_comp[i]
-                if morph_name in coll.objects:
-                    continue
-                # копируем меши
-                #detect suitable obj
-
-                new_obj = obj.copy()
-                new_obj.name = model().morph_comp[i] + obj.name
-                new_obj.data = obj.data.copy()
-                # all my homies hate animation
-                new_obj.animation_data_clear()
-                new_obj.shape_key_clear()
-                new_obj.data.name = new_obj.name
-                coll.objects.link(new_obj)
-                new_obj.select_set(False)
-
-        vectors = [
-            (scn.s_s_x, scn.s_s_y, scn.s_s_z),
-            (scn.s_d_x, scn.s_d_y, scn.s_d_z),
-            (scn.s_u_x, scn.s_u_y, scn.s_u_z),
-            (scn.scaled, scn.scaled, scn.scaled),
-            (scaled + scn.s_s_x - 1, scaled + scn.s_s_y - 1, scaled + scn.s_s_z - 1),
-            (scaled + scn.s_d_x - 1, scaled + scn.s_d_y - 1, scaled + scn.s_d_z - 1),
-            (scaled + scn.s_u_x - 1, scaled + scn.s_u_y - 1, scaled + scn.s_u_z - 1),
-        ]
-
-        for obj in bpy.context.selected_objects:
-            obj.select_set(False)
-
-        # привязываем родителей
-        for s in range(1, 8):
-            for child, parent in links.items():
-                if parent is None:
-                    continue
-                bpy.data.objects[model().morph_comp[s] + child].parent = bpy.data.objects[
-                    model().morph_comp[s] + parent]
-
-        #Трогаем только scaled коллекции
-        for s in range(1, 8):
-            for child, parent in links.items():
-                if parent is None:
-                    bpy.data.objects[model().morph_comp[s] + child].scale = vectors[s - 1]
-
-        for obj in bpy.context.selected_objects:
-            obj.select_set(False)
-
-        for i in range(0, 8):
-            coll_name = model().morph_collection[i]
-            coll = bpy.data.collections.get(coll_name)
-            for obj in coll.objects:
-                obj.select_set(True)
-                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-                obj.select_set(False)
-
+        scene_utils.create_all_morphs(context, mesh_mask_set)
         return {'FINISHED'}
 
 
@@ -764,14 +703,6 @@ class CClear_OP_operator(bpy.types.Operator):
     def execute(self, context: bpy.types.Context) -> set[str]:
         scene_clear()
         return {'FINISHED'}
-
-def get_name(cls, mesh_mask):
-    if mesh_mask:
-        text = str(len(mesh_mask.split(',')))
-    else:
-        base_coll = get_collection("base")
-        text = str(len(base_coll.objects)) if base_coll else "all"
-    return cls.bl_label % text
 
 class CImport_OP_operator(bpy.types.Operator):
     bl_label = 'Import %s meshes'
