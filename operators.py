@@ -515,8 +515,7 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
         scn = scene
         scaled = scn.scaled
 
-        if scene_utils.clear_old_morphs():
-            self.report({'INFO'}, 'Старые модели удалены/ old models deleted')
+        scene_utils.clear_old_morphs()
 
         for obj in base_coll.objects:
             if obj.type != 'MESH':
@@ -770,10 +769,18 @@ class CClear_OP_operator(bpy.types.Operator):
 class CImport_OP_operator(bpy.types.Operator):
     bl_label = 'EI model import Operator'
     bl_idname = 'object.model_import'
-    bl_description = 'Import Model/Figure from selected resfile into base collection'
+    bl_description = 'Import Model/Figure from selected resfile into base collection\n' \
+                     'imports meshes based on mesh mask.'
+
+    mesh_mask: bpy.props.StringProperty(name="Mesh mask",
+                                        default="",
+                                        description="Comma-separated include list of mesh names")
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing import model')
+
+        mesh_mask = self.mesh_mask
+        mesh_mask_set = set(map(str.strip, mesh_mask.split(',')))
 
         res_path = bpy.context.scene.res_file
         if not res_path or not os.path.exists(res_path):
@@ -787,7 +794,8 @@ class CImport_OP_operator(bpy.types.Operator):
 
         res_file = ResFile(res_path)
         importlib.reload(scene_utils)
-        res, duration = get_duration(lambda: scene_utils.import_model(context, res_file, model_name))
+        func = lambda: scene_utils.import_model(context, res_file, model_name, mesh_mask_set)
+        res, duration = get_duration(func)
 
         if res is None:
             item_list = list()

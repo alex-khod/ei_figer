@@ -35,7 +35,8 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
             elem.operator('object.select_resfile', text='Select').res_file_index = index
         layout.label(text=str(context.scene.res_file), icon='FILE_FOLDER')
         layout.prop(context.scene, 'figmodel_name')
-        layout.operator('object.model_import', text='Import')
+        layout.prop(context.scene, 'mesh_mask')
+        layout.operator('object.model_import', text='Import').mesh_mask = context.scene.mesh_mask
         row = layout.split()
         row.prop(context.scene, 'auto_fix')
         row.prop(context.scene, 'ether')
@@ -165,13 +166,13 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         #layout.label(text='Animations')
         layout.prop(context.scene, 'animation_name')
 
-        layout.prop(context.scene, 'is_animation_to_new_collection')
+        # layout.prop(context.scene, 'is_animation_to_new_collection')
 
-        use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
-        label = operators.CAnimation_OP_import.bl_label % use_collection
-        layout.operator('object.animation_import', text=label).target_collection = use_collection
-        label = operators.CAnimation_OP_Export.bl_label % use_collection
-        layout.operator('object.animation_export', text=label).target_collection = use_collection
+        # use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
+        # label = operators.CAnimation_OP_import.bl_label % use_collection
+        # layout.operator('object.animation_import', text=label).target_collection = use_collection
+        # label = operators.CAnimation_OP_Export.bl_label % use_collection
+        # layout.operator('object.animation_export', text=label).target_collection = use_collection
         layout.prop(context.scene, 'animsubfix')
         layout.operator('object.animation_shapekey', text='Shapekey')
         layout.prop(context.scene, 'skeletal')

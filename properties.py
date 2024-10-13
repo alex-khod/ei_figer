@@ -142,6 +142,11 @@ def register_props():
         description='Parent of figure you want to copy'
     )
 
+    scene.mesh_mask = bpy.props.StringProperty(
+        name='Mesh mask',
+        default="",
+        description="Comma-separated include list of meshes (include all meshes if empty)"
+    )
 
     scene.mesh_str = bpy.props.FloatProperty(
         name='str',
@@ -250,5 +255,10 @@ def unregister_props():
     del scene.mesh_str
     del scene.mesh_dex
     del scene.mesh_height
+
+    del scene.is_animation_to_new_collection
+    del scene.mesh_mask
+
+    del scene.skeletal
 
     del scene.model

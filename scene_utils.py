@@ -20,6 +20,7 @@ from math import sqrt
 from mathutils import Quaternion, Vector, Matrix
 import copy as cp
 import collections as py_collections
+from typing import Set
 
 from . utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
 from . bone import CBone
@@ -36,8 +37,7 @@ def get_collection(collection_name = "base") -> bpy.types.Collection:
     collection = bpy.data.collections.get(collection_name)
     return collection
 
-def force_rename(obj, name):
-    old_obj = bpy.data.objects.get(name)
+def rename_serial(old_obj, name):
     count = 1
     rename_old = f"{name}.{count:03d}"
     while rename_old in bpy.data.objects:
@@ -47,10 +47,10 @@ def force_rename(obj, name):
 
 def rename_drop_postfix(objects):
     for obj in objects:
-        name = obj.name.split('.')[0]
+        name = obj.name.rsplit('.')[0]
 
         if name in bpy.data.objects:
-            force_rename(bpy.data.objects.get(name), name)
+            rename_serial(bpy.data.objects.get(name), name)
         obj.name = name
 
 def read_links(lnk_res : ResFile, lnk_name : str):
@@ -106,7 +106,7 @@ def read_bone(bon_res : ResFile, bon_name : str):
         active_model.pos_list.append(bon)
     return err
 
-def read_model(resFile : ResFile, model_name):
+def read_model(resFile : ResFile, model_name, include_meshes=None):
     with resFile.open(model_name + '.mod') as meshes_container:
         mesh_list_res = ResFile(meshes_container)
         links_name = model_name
@@ -114,6 +114,8 @@ def read_model(resFile : ResFile, model_name):
         filenames = mesh_list_res.get_filename_list()
         for mesh_name in filenames:
             if mesh_name == links_name:
+                continue
+            if include_meshes and mesh_name not in include_meshes:
                 continue
             read_figure(mesh_list_res, mesh_name)
         return links
@@ -141,26 +143,35 @@ def read_animations(resFile : ResFile, model_name : str, animation_name : str) -
                     anm_list.append(anm)
     return CAnimations(anm_list)
 
-def import_mod_file(res_file, model_name):
+def ensure_morph_collections():
+    active_model: CModel = bpy.types.Scene.model
+    for collection_name in active_model.morph_collection:
+        if collection_name not in bpy.data.collections:
+            collection = bpy.data.collections.new(collection_name)
+            bpy.context.scene.collection.children.link(collection)
+
+def import_mod_file(res_file, model_name, include_meshes=None):
     print("reading mod")
     active_model: CModel = bpy.types.Scene.model
     active_model.reset('fig')
     active_model.name = model_name
 
-    links = read_model(res_file, model_name)
+    links = read_model(res_file, model_name, include_meshes)
     #            if read_figSignature(resFile, model_name) == 8:          ##LostSoul
     bEtherlord = bpy.context.scene.ether
     if not bEtherlord:
         read_bones(res_file, model_name)
     #                break
-    item_group = CItemGroupContainer().get_item_group(active_model.name)
+    container = CItemGroupContainer()
+    item_group = container.get_item_group(active_model.name)
+    ensure_morph_collections()
     for fig in active_model.mesh_list:
         create_mesh_2(fig, item_group)
-    create_links_2(links)
+    create_links_2(links, item_group.morph_component_count)
     for bone in active_model.pos_list:
-        set_pos_2(bone)
+        set_pos_2(bone, container)
 
-def import_lnk_fig_bon_files(res_file, model_name):
+def import_lnk_fig_bon_files(res_file, model_name, include_meshes=None):
     print("reading lnk")
     active_model: CModel = bpy.types.Scene.model
     active_model.reset('fig')
@@ -175,36 +186,35 @@ def import_lnk_fig_bon_files(res_file, model_name):
             renamed_dict[active_model.name + part] = active_model.name + parent
     model_links.links = renamed_dict
     # read parts
+    filenames = res_file.get_filename_list()
     for part in model_links.links.keys():
-        if (part + '.fig') in res_file.get_filename_list():
+        if part not in include_meshes:
+            continue
+        if (part + '.fig') in filenames:
             read_figure(res_file, part + '.fig')
             nnn = (active_model.mesh_list[-1].name.split(model_name)[1]).rsplit('.')[0]  # TODO: nnn
             active_model.mesh_list[-1].name = nnn
         else:
             print(part + '.fig not found')
-
-        if (part + '.bon') in res_file.get_filename_list():
+        if (part + '.bon') in filenames:
             read_bone(res_file, part + '.bon')
         else:
             print(part + '.bon not found')
     # RuntimeError('Stopping the script here')
-    item_group = CItemGroupContainer().get_item_group(active_model.name)
+    container = CItemGroupContainer()
+    item_group = container.get_item_group(active_model.name)
+    ensure_morph_collections()
     for fig in active_model.mesh_list:
         create_mesh_2(fig, item_group)
 
-    create_links_2(model_links)
+    create_links_2(model_links, item_group.morph_component_count)
     for bone in active_model.pos_list:
-        set_pos_2(bone)
+        set_pos_2(bone, container)
 
-def import_model(context, res_file, model_name):
-    base_coll = get_collection("base")
-    if base_coll:
-        for obj in get_collection("base").objects:
-            bpy.data.objects.remove(obj)
-    clear_old_morphs()
 
+def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
     if (model_name + '.mod') in res_file.get_filename_list():
-        import_mod_file(res_file, model_name)
+        import_mod_file(res_file, model_name, include_meshes)
     elif (model_name + '.lnk') in res_file.get_filename_list():
         import_lnk_fig_bon_files(res_file, model_name)
     else:
@@ -311,8 +321,9 @@ def blender2abs_rotations(links: CLink, animations: CAnimations):
 
     return 0
 
-def clear_old_morphs():
-    for coll_name in model().morph_collection[1:]:
+
+def clear_old_morphs(start_index=1):
+    for coll_name in model().morph_collection[start_index:]:
         coll = get_collection(coll_name)
         if not coll:
             continue
@@ -322,6 +333,7 @@ def clear_old_morphs():
 
 
 def create_mesh_2(figure: CFigure, item_group: CItemGroup):
+    # create mesh, replacing old in collection or renaming same-named mesh elsewhere
     active_model : CModel = bpy.context.scene.model
     faces = []
     ftemp = [0, 0, 0]
@@ -336,24 +348,24 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
         mesh_count = item_group.morph_component_count
     else:
         mesh_count = 1
+
     for mesh_num in range(mesh_count):
-#    for mesh_num in range(1):
+        collection_name = active_model.morph_collection[mesh_num]
+        collection = get_collection(collection_name)
         name = active_model.morph_comp[mesh_num] + figure.name
+        # remove old mesh
+        old_obj_collection = collection.objects.get(name)
+        if old_obj_collection:
+            bpy.data.objects.remove(old_obj_collection)
+        old_obj = bpy.data.objects.get(name)
+        if old_obj:
+            rename_serial(old_obj, name)
+        # insert new mesh
         base_mesh = bpy.data.meshes.new(name=name)
         base_obj = bpy.data.objects.new(name, base_mesh)
-        # assert new object has correct name
-        base_obj.name = name
-        collection_name = active_model.morph_collection[mesh_num]
-#        print('name = ' + name)
-        if collection_name in bpy.data.collections:
-            collection = bpy.data.collections[collection_name]
-        else:
-            collection = bpy.data.collections.new(collection_name)
-            bpy.context.scene.collection.children.link(collection)
-        bpy.data.collections[collection_name].objects.link(base_obj)
+        collection.objects.link(base_obj)
         base_obj.location = (0, 0, 0)
         base_mesh.from_pydata(figure.verts[mesh_num], [], faces)
-        
         
         #TODO: create material
         print('meshname ' + name + ' is creating')
@@ -365,9 +377,8 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
         print('meshname ' + name + ' created')
         base_mesh.update()
     
-def set_pos_2(bone : CBone):
+def set_pos_2(bone : CBone, container: CItemGroupContainer):
     active_model : CModel = bpy.context.scene.model
-    container = CItemGroupContainer()
     item_group = container.get_item_group(bone.name)
     obj_count = item_group.morph_component_count
     
@@ -379,14 +390,11 @@ def set_pos_2(bone : CBone):
     
     return 0
 
-def create_links_2(link : CLink):
-    active_model : CModel = bpy.context.scene.model
-    container = CItemGroupContainer()
+def create_links_2(link: CLink, obj_count=1):
+    active_model: CModel = bpy.context.scene.model
     for part, parent in link.links.items():
         if parent is None:
             continue
-        
-        obj_count = container.get_item_group(active_model.name).morph_component_count
         for obj_num in range(obj_count):
             part_name = active_model.morph_comp[obj_num] + part
             parent_name = active_model.morph_comp[obj_num] + parent

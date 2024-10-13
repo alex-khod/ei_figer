@@ -76,7 +76,7 @@ class CModel():
             'str(scaled)',      #5
             'dex(scaled)',      #6
             'unique(scaled)',   #7
-            'testUnit'          #8
+            # 'testUnit'          #8
         ]
 
         self.mesh_list: list[CFigure] = list()
