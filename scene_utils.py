@@ -54,14 +54,12 @@ def rename_drop_postfix(objects):
         obj.name = name
 
 def read_links(lnk_res : ResFile, lnk_name : str):
-    active_model : CModel = bpy.types.Scene.model
-    err = 0
     with lnk_res.open(lnk_name) as lnk_res:
         data = lnk_res.read()
         lnk = CLink()
-        err += lnk.read_lnk(data)
-        active_model.links = lnk
-    return err
+        lnk.read_lnk(data)
+    return lnk
+
 from . utils import CByteReader, unpack_uv, pack_uv, pack, unpack, \
     read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, \
     get_uv_convert_count
@@ -109,15 +107,16 @@ def read_bone(bon_res : ResFile, bon_name : str):
     return err
 
 def read_model(resFile : ResFile, model_name):
-    err = 0
     with resFile.open(model_name + '.mod') as meshes_container:
         mesh_list_res = ResFile(meshes_container)
-        for mesh_name in mesh_list_res.get_filename_list():
-            if mesh_name == model_name:
-                err += read_links(mesh_list_res, mesh_name)
-            else:
-                err += read_figure(mesh_list_res, mesh_name)
-    return err
+        links_name = model_name
+        links = read_links(mesh_list_res, links_name)
+        filenames = mesh_list_res.get_filename_list()
+        for mesh_name in filenames:
+            if mesh_name == links_name:
+                continue
+            read_figure(mesh_list_res, mesh_name)
+        return links
 
 def read_bones(resFile : ResFile, model_name):
     err = 0
@@ -148,7 +147,7 @@ def import_mod_file(res_file, model_name):
     active_model.reset('fig')
     active_model.name = model_name
 
-    read_model(res_file, model_name)
+    links = read_model(res_file, model_name)
     #            if read_figSignature(resFile, model_name) == 8:          ##LostSoul
     bEtherlord = bpy.context.scene.ether
     if not bEtherlord:
@@ -157,7 +156,7 @@ def import_mod_file(res_file, model_name):
     item_group = CItemGroupContainer().get_item_group(active_model.name)
     for fig in active_model.mesh_list:
         create_mesh_2(fig, item_group)
-    create_links_2(active_model.links)
+    create_links_2(links)
     for bone in active_model.pos_list:
         set_pos_2(bone)
 
@@ -167,34 +166,33 @@ def import_lnk_fig_bon_files(res_file, model_name):
     active_model.reset('fig')
     active_model.name = model_name
 
-    err = read_links(res_file, model_name + '.lnk')
+    model_links: CLink = read_links(res_file, model_name + '.lnk')
     renamed_dict = dict()
-    for part, parent in active_model.links.links.items():
+    for part, parent in model_links.links.items():
         if parent is None:
             renamed_dict[active_model.name + part] = None
         else:
             renamed_dict[active_model.name + part] = active_model.name + parent
-    active_model.links.links = renamed_dict
-    if err == 0:
-        # read parts
-        for part in active_model.links.links.keys():
-            if (part + '.fig') in res_file.get_filename_list():
-                read_figure(res_file, part + '.fig')
-                nnn = (active_model.mesh_list[-1].name.split(model_name)[1]).rsplit('.')[0]  # TODO: nnn
-                active_model.mesh_list[-1].name = nnn
-            else:
-                print(part + '.fig not found')
+    model_links.links = renamed_dict
+    # read parts
+    for part in model_links.links.keys():
+        if (part + '.fig') in res_file.get_filename_list():
+            read_figure(res_file, part + '.fig')
+            nnn = (active_model.mesh_list[-1].name.split(model_name)[1]).rsplit('.')[0]  # TODO: nnn
+            active_model.mesh_list[-1].name = nnn
+        else:
+            print(part + '.fig not found')
 
-            if (part + '.bon') in res_file.get_filename_list():
-                read_bone(res_file, part + '.bon')
-            else:
-                print(part + '.bon not found')
+        if (part + '.bon') in res_file.get_filename_list():
+            read_bone(res_file, part + '.bon')
+        else:
+            print(part + '.bon not found')
     # RuntimeError('Stopping the script here')
     item_group = CItemGroupContainer().get_item_group(active_model.name)
     for fig in active_model.mesh_list:
         create_mesh_2(fig, item_group)
 
-    create_links_2(active_model.links)
+    create_links_2(model_links)
     for bone in active_model.pos_list:
         set_pos_2(bone)
 
