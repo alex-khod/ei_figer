@@ -232,6 +232,11 @@ def export_model(context, res_path, model_name, include_meshes=None):
     collect_pos(model_name, include_meshes)
     collect_mesh(include_meshes)
 
+    # backup_path = "D:\\Games\\Jamais Vu New\\Starter\\Mods\\JamaisVu\\res\\newmonsters — копия.res"
+    # with open(res_path, "wb") as dst:
+    #     with open(backup_path, "rb") as src:
+    #         dst.write(src.read())
+
     obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
     if obj_count == 1:  # save lnk,fig,bon into res (without model resfile)
         with ResFile(res_path, 'a') as res:
@@ -254,26 +259,19 @@ def export_model(context, res_path, model_name, include_meshes=None):
                     file.write(data)
     else:
         # append data
-        initial_model = {}
-        initial_bone = {}
+        initial_model = None
+        initial_bone = None
         if include_meshes:
             with ResFile(res_path, 'r') as res:
                 with res.open(active_model.name + '.mod', 'r') as file:
-                    with ResFile(file, 'r') as res2:
-                        for file2 in res2.get_filename_list():
-                            with res2.open(file2, 'r') as f2:
-                                initial_model[file2] = f2.read()
+                    initial_model = file.read()
                 with res.open(active_model.name + '.bon', 'r') as file:
-                    with ResFile(file, 'r') as res2:
-                        for file2 in res2.get_filename_list():
-                            with res2.open(file2, 'r') as f2:
-                                initial_bone[file2] = f2.read()
+                    initial_bone = file.read()
+
         # prepare links + figures (.mod file)
-        model_res = io.BytesIO()
-        with ResFile(model_res, 'w') as res:
-            for file2, data in initial_model.items():
-                with res.open(file2, 'w') as file:
-                    file.write(data)
+        model_res = io.BytesIO(initial_model)
+        open_mode = 'a' if initial_model else 'w'
+        with ResFile(model_res, open_mode) as res:
             # write lnk
             with res.open(active_model.name, 'w') as file:
                 data = links.write_lnk()
@@ -285,12 +283,8 @@ def export_model(context, res_path, model_name, include_meshes=None):
                     file.write(data)
 
         # prepare bons file (.bon file)
-        bone_res = io.BytesIO()
-        with ResFile(bone_res, 'w') as res:
-            for file2, data in initial_bone.items():
-                with res.open(file2, 'w') as file:
-                    file.write(data)
-
+        bone_res = io.BytesIO(initial_bone)
+        with ResFile(bone_res, open_mode) as res:
             for part in active_model.pos_list:
                 with res.open(part.name, 'w') as file:
                     data = part.write_bon()
