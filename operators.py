@@ -701,7 +701,10 @@ class CClear_OP_operator(bpy.types.Operator):
     bl_description = 'Should be pretty obvious'
 
     def execute(self, context: bpy.types.Context) -> set[str]:
-        scene_clear()
+        bpy.context.window_manager.progress_begin(0, 100)
+        _, duration = get_duration(lambda : scene_clear())
+        bpy.context.window_manager.progress_end()
+        self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
 
 class CImport_OP_operator(bpy.types.Operator):
@@ -731,12 +734,17 @@ class CImport_OP_operator(bpy.types.Operator):
 
         res_file = ResFile(res_path)
         importlib.reload(scene_utils)
+        importlib.reload(figure)
+        from . import utils as fig_utils
+        importlib.reload(fig_utils)
 
         mesh_mask = self.mesh_mask
         mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
 
+        bpy.context.window_manager.progress_begin(0, 99)
         func = lambda: scene_utils.import_model(context, res_file, model_name, mesh_mask_set)
         res, duration = get_duration(func)
+        bpy.context.window_manager.progress_end()
 
         if res is None:
             item_list = list()
@@ -775,6 +783,9 @@ class CExport_OP_operator(bpy.types.Operator):
             return {'CANCELLED'}
 
         importlib.reload(scene_utils)
+        importlib.reload(figure)
+        from . import utils as fig_utils
+        importlib.reload(fig_utils)
 
         model_name: bpy.props.StringProperty = bpy.context.scene.figmodel_name
         if not model_name:
@@ -793,7 +804,9 @@ class CExport_OP_operator(bpy.types.Operator):
         mesh_mask = self.mesh_mask
         mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
         func = lambda: scene_utils.export_model(context, res_path, model_name, mesh_mask_set)
+        bpy.context.window_manager.progress_begin(0, 99)
         _, duration = get_duration(func)
+        bpy.context.window_manager.progress_end()
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
