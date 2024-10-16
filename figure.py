@@ -162,8 +162,6 @@ class CFigure(object):
         return 1
 
     def write_fig(self):
-        raw_data = b''
-        
         if len(self.normals) != self.header[1]*4: #normal count * block_size(4)
             print('normals count corrupted')
         if len(self.t_coords) != self.header[2]:
@@ -174,52 +172,64 @@ class CFigure(object):
             print('morph components count corrupted')
         if len(self.center) != 8 or len(self.fmin) != 8 or len(self.fmax) != 8 or len(self.center) != 8:
             print('aux data components count corrupted')
-        raw_data += pack('4s', b'FIG8')
+        raw_data = pack('4s', b'FIG8')
         # header
-        for header_ind in range(9):
-            raw_data += pack('i', self.header[header_ind])
+        assert(len(self.header) == 9)
+        raw_data += pack('9i', *self.header)
         # center
-        for vec in self.center:
-            raw_data += pack('%sf' % len(vec), *vec)
+        for v_c in self.center:
+            raw_data += pack('%sf' % len(v_c), *v_c)
         # min
-        for vec in self.fmin:
-            raw_data += pack('%sf' % len(vec), *vec)
+        for v_c in self.fmin:
+            raw_data += pack('%sf' % len(v_c), *v_c)
         # max
-        for vec in self.fmax:
-            raw_data += pack('%sf' % len(vec), *vec)
+        for v_c in self.fmax:
+            raw_data += pack('%sf' % len(v_c), *v_c)
         # radius
         for rad in self.radius:
             raw_data += pack('f', rad)
         # verts
         block_index = 0
+        vertex_items = []
         for _ in range(self.header[0]):
             for xyz in range(3):
                 for i in range(self.morph_count):
                     for cur_block_ind in range(4):
-                        raw_data += pack('f', self.verts[i][block_index + cur_block_ind][xyz])
+                        # [xxxx * morph_count, yyyy * morph_count, zzzz * morph_count]
+                        vertex_items.append(self.verts[i][block_index + cur_block_ind][xyz])
             block_index += 4
+        vertex_data = pack('%uf' % len(vertex_items), *vertex_items)
+        raw_data += vertex_data
         # normals
         block_index = 0
+        normal_items = []
         for _ in range(self.header[1]):
             for xyzw in range(4):
                     for cur_block_ind in range(4):
-                        raw_data += pack('f', self.normals[block_index + cur_block_ind][xyzw])
+                        # [xxxx yyyy zzzz wwww]
+                        normal_items.append(self.normals[block_index + cur_block_ind][xyzw])
             block_index += 4
+        normal_data = pack('%uf' % len(normal_items), *normal_items)
+        raw_data += normal_data
         # texture coordinates
-        pack_uv(self.t_coords, *get_uv_params(self.name))
-        
-        for vec in self.t_coords:
-            raw_data += pack('%sf' % len(vec), *vec)
+        import copy
+        packed_uvs = self.t_coords
+        # packed_uvs = copy.deepcopy(self.t_coords)
+        # NOTE: mutating function
+        # pack_uv(packed_uvs, *get_uv_params(self.name))
+        # uv_items = [uv for uvs in packed_uvs for uv in uvs]
+        # uvs_chunk2 = pack('%sf' % len(uv_items), *uv_items)
+        assert self.t_coords.dtype == 'f'
+        uvs_chunk = self.t_coords.tobytes()
+        raw_data += uvs_chunk
         # indicies
-        for ind in self.indicies:
-            raw_data += pack('h', ind)
+        raw_data += pack('%uh' % len(self.indicies), *self.indicies)
         # vertex components
-        for vec in self.v_c:
-            raw_data += pack('h', vec[0]) #TODO: save real data instead copy of 0 element
-            raw_data += pack('hh', vec[0], vec[1])
-        # morphing components
-        for vec in self.m_c:
-            raw_data += pack('%sh' % len(vec), *vec)
+        # TODO: save real data instead copy of 0 element
+        vertex_components = [co for v_c in self.v_c for co in [v_c[0], v_c[0], v_c[1]]]
+        raw_data += pack('%uh' % len(vertex_components), *vertex_components)
+        morph_components = [co for m_c in self.m_c for co in m_c]
+        raw_data += pack('%sh' % len(morph_components), *morph_components)
         return raw_data
 
     def import_fig(self, fig_path):
@@ -282,55 +292,6 @@ class CFigure(object):
                 # print('EOF reached')
                 return 0
         return 1
-
-    def export_fig(self, fig_path):
-        '''
-        Writes figure file
-        '''
-        with open(fig_path, 'wb') as fig_file:
-            # signature
-            fig_file.write(b'FIG8')
-            # header
-            for header_ind in range(9):
-                fig_file.write(pack('i', self.header[header_ind]))
-            # center
-            for i in range(self.morph_count):
-                write_xyz(fig_file, self.center[i])
-            # min
-            for i in range(self.morph_count):
-                write_xyz(fig_file, self.fmin[i])
-            # max
-            for i in range(self.morph_count):
-                write_xyz(fig_file, self.fmax[i])
-            # radius
-            for i in range(self.morph_count):
-                fig_file.write(pack('f', self.radius[i]))
-            # verts
-            block_index = 0
-            for _ in range(self.header[0]):
-                for xyz in range(3):
-                    for i in range(self.morph_count):
-                        for cur_block_ind in range(4):
-                            fig_file.write(pack('f', self.verts[i][block_index + cur_block_ind][xyz]))
-                block_index += 4
-            # normals
-            block_index = 0
-            for i in range(self.header[1]*4): #normal count * block_size(4)
-                write_xyzw(fig_file, self.normals[i])
-            # texture coordinates
-            pack_uv(self.t_coords, *get_uv_params(self.name))
-            for tex_ind in range(self.header[2]):
-                write_xy(fig_file, self.t_coords[tex_ind])
-            # indicies
-            for i in range(self.header[3]):
-                fig_file.write(pack('h', self.indicies[i]))
-            # vertex components
-            for i in range(self.header[4]):
-                fig_file.write(pack('h', self.v_c[i][0])) #TODO: save real data instead copy of 0 element
-                write_xy(fig_file, self.v_c[i], 'h')
-            # morphing components
-            for i in range(self.header[5]):
-                write_xy(fig_file, self.m_c[i], 'h')
     
     def fillVertices(self):
         for i in range(1, 8):

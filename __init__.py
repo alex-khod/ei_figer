@@ -34,6 +34,7 @@ from bpy.utils import unregister_class
 from . import scene_utils
 from . import scene_management
 from . import animation
+from . import figure
 
 bl_panels = (
     UI_panel.IMPORT_EXPORT_PT_PANEL,
@@ -81,6 +82,7 @@ def reload_modules():
     importlib.reload(scene_utils)
     importlib.reload(scene_management)
     importlib.reload(animation)
+    importlib.reload(figure)
 
 def register():
     print("Register")

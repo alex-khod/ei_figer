@@ -186,25 +186,12 @@ def pack_uv(uv_, count, uv_base=None):
     decreases x,y value 2 times per side and offset by y(vertically)
     '''
     
-    if uv_base==(-1, -1):
-        pack_uv_old(uv_, count)
-    else:
-        uv_base = uv_base or (0, 1)
-        for _ in range(count):
-            for uv_convert in uv_:
-                uv_convert[0] = uv_base[0]/2 + uv_convert[0]/2
-                uv_convert[1] = uv_base[1]/2 + uv_convert[1]/2
-    
-
-def pack_uv_old(uv_, count):
-    '''
-    decreases x,y value 2 times per side and offset by y(vertically)
-    '''
+    if uv_base == (-1, -1) or uv_base is None:
+        uv_base = (0, 1)
     for _ in range(count):
         for uv_convert in uv_:
-            uv_convert[0] /= 2
-            uv_convert[1] = 0.5 + uv_convert[1] / 2
-
+            uv_convert[0] = uv_base[0]/2 + uv_convert[0]/2
+            uv_convert[1] = uv_base[1]/2 + uv_convert[1]/2
 
 def calculate_unique_component(ei_, comp):
     '''

@@ -1,4 +1,5 @@
 # Copyright (c) 2022 konstvest
+import importlib
 import typing
 
 # This program is free software: you can redistribute it and/or modify
@@ -21,15 +22,31 @@ from math import sqrt
 from mathutils import Quaternion, Vector, Matrix
 import copy as cp
 import collections as py_collections
-from typing import Set
+from typing import Set, Tuple, List
+import numpy as np
 
 from . utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
 from . bone import CBone
-from . figure import CFigure
+from . import figure
+CFigure = figure.CFigure
 from . resfile import ResFile
 from . scene_management import CModel, CAnimations
 from . animation import CAnimation
 from . links import CLink
+from . utils import CByteReader
+
+profilehooks = None
+try:
+    from .dev import profilehooks
+except ImportError:
+    print("No profilehooks")
+    pass
+
+def profile(func):
+    if profilehooks is not None:
+        return profilehooks.profile(immediate=True)(func)
+    else:
+        return func
 
 def model() -> CModel:
     return bpy.context.scene.model
@@ -60,10 +77,6 @@ def read_links(lnk_res : ResFile, lnk_name : str):
         lnk = CLink()
         lnk.read_lnk(data)
     return lnk
-
-from . utils import CByteReader, unpack_uv, pack_uv, pack, unpack, \
-    read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, \
-    get_uv_convert_count
 
 def read_figure(fig_res : ResFile, fig_name : str):
     active_model : CModel = bpy.types.Scene.model
@@ -222,7 +235,9 @@ def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
         return None
     return True
 
+@profile
 def export_model(context, res_path, model_name, include_meshes=None):
+    importlib.reload(figure)
     links = collect_links()
 
     active_model: CModel = bpy.types.Scene.model
@@ -230,9 +245,9 @@ def export_model(context, res_path, model_name, include_meshes=None):
     active_model.name = model_name
 
     collect_pos(model_name, include_meshes)
-    collect_mesh(include_meshes)
+    ModelExporter.collect_mesh(include_meshes)
 
-    # backup_path = "D:\\Games\\Jamais Vu New\\Starter\\Mods\\JamaisVu\\res\\newmonsters — копия.res"
+    # backup_path = res_path + ".backup"
     # with open(res_path, "wb") as dst:
     #     with open(backup_path, "rb") as src:
     #         dst.write(src.read())
@@ -734,168 +749,182 @@ def collect_pos(model_name, include_meshes=None):
         model().pos_list.append(bone)
     return err
 
-def collect_mesh(include_meshes=None):
-    err = 0
-    item = CItemGroupContainer().get_item_group(model().name)
-    obj_count = item.morph_component_count
-    base_coll = get_collection()
+class ModelExporter:
 
-    individual_group=['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left', 'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
+    @staticmethod
+    def calculate_figure_bounds(mesh_group, figure: CFigure, vertices):
+        min_m = []
+        max_m = []
+        for xyz in range(3):
+            min_co = min(vertices, key=lambda vert: vert[xyz])
+            max_co = max(vertices, key=lambda vert: vert[xyz])
+            min_m.append(min_co[xyz])
+            max_m.append(max_co[xyz])
 
-    for obj in base_coll.objects:
-        if obj.type != 'MESH':
-            continue
-        if include_meshes and obj.name not in include_meshes:
-            continue
-        figure = CFigure()
-        obj_group = CItemGroupContainer().get_item_group(obj.name)
-        if obj_group.type in individual_group:
-            figure.header[7] = obj_group.ei_group
-            figure.header[8] = obj_group.t_number
-        else:
-            figure.header[7] = item.ei_group
-            figure.header[8] = item.t_number
-        for i in range(obj_count):
-            #TODO: if object has no this morph comp, use previous components (end-point: base)
-            morph_coll = bpy.data.collections.get(model().morph_collection[i])
-            morph_mesh : bpy.types.Mesh = morph_coll.objects[model().morph_comp[i] + obj.name].data
+        figure.fmin.append(tuple(min_m))
+        figure.fmax.append(tuple(max_m))
+        # RADIUS
+        figure.radius.append(sqrt(
+            (max_m[0] - min_m[0]) ** 2 + \
+            (max_m[1] - min_m[1]) ** 2 + \
+            (max_m[2] - min_m[2]) ** 2) / 2)
+        # CENTER
+        figure.center.append(mulVector(sumVector(min_m, max_m), 0.5))
 
-            count_vert = 0
-            count_norm = 0
-            v_restore = 0
-            ind_count = 0
-            duplicate_vert = 0
-            duplicate_ind = [[], []]
-            min_m = [0, 0, 0]
-            max_m = [0, 0, 0]
+        # move min/max to center of model for world objects
+        if mesh_group.type == 'world objects':
+            figure.fmin[-1] = tuple(subVector(figure.fmin[-1], figure.center[-1]))
+            figure.fmax[-1] = tuple(subVector(figure.fmax[-1], figure.center[-1]))
 
-            # VERTICES & NORMALS
-            for mvert in morph_mesh.vertices:
-                same_flag = False
-                #collect duplicate vertices
-                for same_vert in range(count_vert):
-                    if mvert.co == figure.verts[i][same_vert]:
-                        same_flag = True
-                        if i == 0:
-                            duplicate_ind[0].append(same_vert)
-                            duplicate_ind[1].append(duplicate_vert)
-                if not same_flag:
-                    # vertices
-                    figure.verts[i].append(tuple(mvert.co))
-                    count_vert += 1
-                    # normals
-                    if i == 0:
-                        figure.normals.append(tuple([mvert.normal[0], mvert.normal[1],
-                                mvert.normal[2], 1.0]))
-                        count_norm += 1
-                    # MIN & MAX PREPARE
-                    if mvert.index == 0:
-                        min_m = copy.copy(mvert.co)
-                        max_m = copy.copy(mvert.co)
-                    for xyz in range(3):
-                        if max_m[xyz] < mvert.co[xyz]: max_m[xyz] = mvert.co[xyz]
-                        if min_m[xyz] > mvert.co[xyz]: min_m[xyz] = mvert.co[xyz]
-                if i == 0:
-                    duplicate_vert += 1
- 
-            figure.fmin.append(tuple(min_m))
-            figure.fmax.append(tuple(max_m))
-            # RADIUS
-            figure.radius.append(sqrt(
-                (max_m[0] - min_m[0]) ** 2 +\
-                    (max_m[1] - min_m[1]) ** 2 +\
-                    (max_m[2] - min_m[2]) ** 2) / 2)
-            # CENTER
-            figure.center.append(mulVector(sumVector(min_m, max_m), 0.5))
-            if count_vert != 0 and i == 0:
-                figure.header[5] = count_vert
+    @staticmethod
+    def calculate_figure_bounds_np(obj_group, figure: CFigure, vertices):
+        min_m = vertices.min(axis=0)
+        max_m = vertices.max(axis=0)
+
+        figure.fmin.append(tuple(min_m))
+        figure.fmax.append(tuple(max_m))
+        # RADIUS
+        figure.radius.append((((max_m - min_m) ** 2).sum() ** 1/2) / 2)
+        # CENTER
+        figure.center.append(mulVector(sumVector(min_m, max_m), 0.5))
+
+        # move min/max to center of model for world objects
+        if obj_group.type == 'world objects':
+            figure.fmin[-1] = tuple(subVector(figure.fmin[-1], figure.center[-1]))
+            figure.fmax[-1] = tuple(subVector(figure.fmax[-1], figure.center[-1]))
+
+    @staticmethod
+    def align_length_by_4(vertices, align_element=None):
+        # ensure vertex count is divisible by 4
+        to_append = (4 - (len(vertices) % 4)) % 4
+        for _ in range(to_append):
+            vertices.append(align_element)
+        return vertices
+
+    @staticmethod
+    def align_length_by_4_np(vertices):
+        to_append = (4 - (len(vertices) % 4)) % 4
+        padded = np.zeros((vertices.shape[0] + to_append, vertices.shape[1]), vertices.dtype)
+        padded[: vertices.shape[0], :] = vertices
+        return padded
+
+    @staticmethod
+    def collect_base_mesh_simple(figure, mesh: bpy.types.Mesh):
+        # export base mesh
+        figure.t_coords = []
+        figure.v_c = []
+        uv_data = mesh.uv_layers.active.data
+
+        for loop_index, loop in enumerate(mesh.loops):
+            vertex_index = loop.vertex_index
+            uv = uv_data[loop_index].uv
+            figure.t_coords.append([uv[0], uv[1]])
+            uv_index = len(figure.t_coords) - 1
+            figure.v_c.append((vertex_index, uv_index))
+            vc_index = len(figure.v_c) - 1
+            figure.indicies.append(vc_index)
+
+        figure.header[0] = int(len(figure.verts[0]) / 4)
+        figure.header[1] = int(len(figure.normals) / 4)
+        figure.header[2] = len(figure.t_coords)
+        figure.header[3] = len(figure.indicies)
+        figure.header[4] = len(figure.v_c)
+
+    @staticmethod
+    def collect_base_mesh_simple_np(figure, mesh: bpy.types.Mesh, mesh_group: CItemGroup):
+        n_vertex = len(mesh.loops)
+
+        vertex_components = np.zeros((n_vertex, 2), dtype=np.int)
+        vertex_indices = np.zeros(n_vertex, dtype=np.int)
+        mesh.loops.foreach_get('vertex_index', vertex_indices)
+        vertex_components[:, 0] = vertex_indices
+        vertex_components[:, 1] = np.arange(n_vertex)
+        figure.v_c = vertex_components
+        # uvs
+        uv_data = mesh.uv_layers.active.data
+        uvs = np.zeros(n_vertex * 2, np.float32)
+        uv_data.foreach_get('uv', uvs)
+        uvs.shape = (n_vertex, 2)
+
+        packed_uvs = ModelExporter.pack_uv_np(uvs, mesh_group.uv_convert_count, mesh_group.uv_base)
+        figure.t_coords = packed_uvs
+        figure.indicies = np.arange(n_vertex)
+
+        figure.header[0] = int(len(figure.verts[0]) / 4)
+        figure.header[1] = int(len(figure.normals) / 4)
+        figure.header[2] = len(figure.t_coords)
+        figure.header[3] = len(figure.indicies)
+        figure.header[4] = len(figure.v_c)
+
+    @staticmethod
+    def pack_uv_np(uvs, count, uv_base=None):
+        if uv_base == (-1, -1) or uv_base is None:
+            uv_base = (0, 1)
+        uv_base = uv_base[0] / 2, uv_base[1] / 2
+        uv_base = np.array(uv_base, dtype=np.float32)
+        for _ in range(count):
+            uvs = uv_base + uvs / 2
+        return uvs
+
+    @staticmethod
+    # @profile
+    def collect_mesh(include_meshes=None):
+        # include_meshes = {"hd.armor28"}
+        model().mesh_list = []
+        model_group = CItemGroupContainer().get_item_group(model().name)
+        obj_count = model_group.morph_component_count
+        base_coll = get_collection()
+
+        individual_group = ['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left',
+                            'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
+
+        for obj in base_coll.objects:
+            if obj.type != 'MESH':
+                continue
+            if include_meshes and obj.name not in include_meshes:
+                continue
+            figure = CFigure()
+            mesh_group = CItemGroupContainer().get_item_group(obj.name)
+            export_group = mesh_group if mesh_group.type in individual_group else model_group
+
+            figure.header[7] = export_group.ei_group
+            figure.header[8] = export_group.t_number
+
+            for i in range(obj_count):
+                # TODO: if object has no this morph comp, use previous components (end-point: base)
+                morph_coll = bpy.data.collections.get(model().morph_collection[i])
+                morph_mesh: bpy.types.Mesh = morph_coll.objects[model().morph_comp[i] + obj.name].data
+                n_vertex = len(morph_mesh.vertices)
+                vertices = np.zeros(n_vertex * 3, np.float32)
+                morph_mesh.vertices.foreach_get('co', vertices)
+                vertices.shape = (n_vertex, 3)
+                morph_components = len(morph_mesh.vertices)
+                ModelExporter.calculate_figure_bounds_np(mesh_group, figure, vertices)
+                padded_vertices = ModelExporter.align_length_by_4_np(vertices)
+                figure.verts[i] = padded_vertices
+                if i > 0:
+                    continue
+                normals = np.zeros(n_vertex * 3, np.float32)
+                morph_mesh.vertices.foreach_get('normal', normals)
+                normals.shape = (n_vertex, 3)
+                to_pad = (4 - (n_vertex % 4)) % 4
+                normals4 = np.zeros((n_vertex + to_pad, 4), np.float32)
+                normals4[:n_vertex, :-1] = normals
+                # (x, y, z, 1.0)
+                normals4[:, -1] = 1.0
+                figure.normals = normals4
+                figure.header[5] = morph_components
                 figure.generate_m_c()
-            
-            #move min/max to center of model for world objects
-            if obj_group.type == 'world objects':
-                figure.fmin[-1] = tuple(subVector(figure.fmin[-1], figure.center[-1]))
-                figure.fmax[-1] = tuple(subVector(figure.fmax[-1], figure.center[-1]))
+                ModelExporter.collect_base_mesh_simple_np(figure, morph_mesh, mesh_group)
 
-            # align vertices
-            v_restore = (4 - (count_vert % 4)) % 4 # fill count until %4 will be 0
-            for _ in range(v_restore):
-                figure.verts[i].append((0.0, 0.0, 0.0))
-                count_vert += 1
-            
-            if i == 0: # ONLY FOR BASE OBJECT
-                figure.header[0] = int(count_vert / 4)
-                if len(figure.normals) % 4 != 0:
-                    for _ in range(4 - len(figure.normals) % 4):
-                        figure.normals.append(
-                            copy.copy(figure.normals[count_norm - 1]))
-                        count_norm += 1
-                figure.header[1] = int(len(figure.normals) / 4)
-                ind_ar = []
-                for mpoly in morph_mesh.polygons:
-                    # INDICES PREPARE
-                    for poly_vrt in mpoly.vertices:
-                        same_flag = False
-                        # remove duplicate indices
-                        for dp_vrt in range(len(duplicate_ind[1])):
-                            if poly_vrt == duplicate_ind[1][dp_vrt]:
-                                same_flag = True
-                                ind_ar.append(duplicate_ind[0][dp_vrt])
-                        if not same_flag:
-                            ind_ar.append(poly_vrt)
-                        ind_count += 1
-                # UV COORDS PREPARE
-                uv_ar = []  # array with all t_coords
-                new_uv_ind = []
-                # get only active layer with uv_cords
-                for uv_act in morph_mesh.uv_layers.active.data:
-                    uv_ = [uv_act.uv[0], uv_act.uv[1]]
-                    uv_ar.append(copy.copy(uv_))
-                    if uv_ not in figure.t_coords:
-                        figure.t_coords.append(uv_)
-                # get indicies of new t_coords array
-                for uv_ind1 in uv_ar:
-                    for uv_ind2 in figure.t_coords:
-                        if uv_ind1 == uv_ind2:
-                            new_uv_ind.append(figure.t_coords.index(uv_ind2))
-                # VERTEX COMPONENTS
-                for n_i in range(len(ind_ar)):
-                    uv_ind = [ind_ar[n_i], new_uv_ind[n_i]]
-                    if uv_ind not in figure.v_c:
-                        figure.v_c.append(copy.copy(uv_ind))
-                #>>>>>TODO use other sort instead bubble sort
-                for _ in range(len(figure.v_c)):
-                    for buble in range(len(figure.v_c) - 1):
-                        if figure.v_c[buble][0] > figure.v_c[buble + 1][0]:
-                            swap_pts = copy.copy(figure.v_c[buble + 1])
-                            figure.v_c[buble + 1] = copy.copy(figure.v_c[buble])
-                            figure.v_c[buble] = copy.copy(swap_pts)
-                        elif figure.v_c[buble][0] == figure.v_c[buble + 1][0]:
-                            if figure.v_c[buble][1] > figure.v_c[buble + 1][1]:
-                                swap_pts = copy.copy(figure.v_c[buble + 1])
-                                figure.v_c[buble + 1] = copy.copy(figure.v_c[buble])
-                                figure.v_c[buble] = copy.copy(swap_pts)
-                figure.header[4] = len(figure.v_c)
-                # INDICIES
-                #>>>>>TODO refactore?!
-                for mix in range(len(ind_ar)):
-                    for mix1 in range(len(figure.v_c)):
-                        if (ind_ar[mix] == figure.v_c[mix1][0]) and\
-                                (new_uv_ind[mix] == figure.v_c[mix1][1]):
-                            figure.indicies.append(mix1)
-                            break
+            figure.name = obj.name
+            if obj_count == 1:
+                figure.fillVertices()
+                figure.fillAux()
 
-                figure.header[2] = len(figure.t_coords)
-                figure.header[3] = ind_count
-        
-        figure.name = obj.name
-        if obj_count == 1:
-            figure.fillVertices()
-            figure.fillAux()
-            
-            
-        model().mesh_list.append(figure)
+            model().mesh_list.append(figure)
 
-    return err
+        return True
 
 def clear_unlinked_data():
     for mesh in bpy.data.meshes:
