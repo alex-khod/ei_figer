@@ -25,7 +25,9 @@ import collections as py_collections
 from typing import Set, Tuple, List
 import numpy as np
 
+
 from . utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
+from . import utils as fig_utils
 from . bone import CBone
 from . import figure
 CFigure = figure.CFigure
@@ -170,20 +172,11 @@ def import_mod_file(res_file, model_name, include_meshes=None):
     active_model.reset('fig')
     active_model.name = model_name
 
-    links = read_model(res_file, model_name, include_meshes)
-    #            if read_figSignature(resFile, model_name) == 8:          ##LostSoul
+    model_links = read_model(res_file, model_name, include_meshes)
     bEtherlord = bpy.context.scene.ether
     if not bEtherlord:
         read_bones(res_file, model_name)
-    #                break
-    container = CItemGroupContainer()
-    item_group = container.get_item_group(active_model.name)
-    ensure_morph_collections()
-    for fig in active_model.mesh_list:
-        create_mesh_2(fig, item_group)
-    create_links_2(links, item_group.morph_component_count)
-    for bone in active_model.pos_list:
-        set_pos_2(bone, container)
+    create_model_meshes(model_links)
 
 def import_lnk_fig_bon_files(res_file, model_name, include_meshes=None):
     print("reading lnk")
@@ -214,18 +207,30 @@ def import_lnk_fig_bon_files(res_file, model_name, include_meshes=None):
             read_bone(res_file, part + '.bon')
         else:
             print(part + '.bon not found')
-    # RuntimeError('Stopping the script here')
+
+    create_model_meshes(model_links, include_meshes)
+
+
+def create_model_meshes(links: CLink, include_meshes=None):
+    active_model: CModel = bpy.types.Scene.model
+
+    bpy.context.window_manager.progress_update(15)
+    scene_clear()
+    bpy.context.window_manager.progress_update(49)
     container = CItemGroupContainer()
     item_group = container.get_item_group(active_model.name)
     ensure_morph_collections()
-    for fig in active_model.mesh_list:
+
+    len_meshes = len(active_model.mesh_list)
+    for i, fig in enumerate(active_model.mesh_list):
+        bpy.context.window_manager.progress_update(49 + int(i / len_meshes * 50))
         create_mesh_2(fig, item_group)
-
-    create_links_2(model_links, item_group.morph_component_count)
+    create_links_2(links, item_group.morph_component_count)
     for bone in active_model.pos_list:
-        set_pos_2(bone, container)
+        morph_count = container.get_item_group(bone.name).morph_component_count
+        set_pos_2(bone, morph_count)
 
-
+@profile
 def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
     if (model_name + '.mod') in res_file.get_filename_list():
         import_mod_file(res_file, model_name, include_meshes)
@@ -237,7 +242,6 @@ def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
 
 @profile
 def export_model(context, res_path, model_name, include_meshes=None):
-    importlib.reload(figure)
     links = collect_links()
 
     active_model: CModel = bpy.types.Scene.model
@@ -426,17 +430,44 @@ def clear_old_morphs(start_index=1, include_meshes=None):
                 bpy.data.objects.remove(obj)
     return True
 
+def tris_mesh_from_pydata(mesh: bpy.types.Mesh, vertices: np.array, triangles: np.array):
+    vertices_len = len(vertices)
+    tris_len = len(triangles)
 
+    mesh.vertices.add(vertices_len)
+    len_loops = 3 * len(triangles)
+    mesh.loops.add(len_loops)
+    mesh.polygons.add(tris_len)
+
+    mesh.vertices.foreach_set("co", vertices.flatten())
+    # skip edges
+    loop_starts = np.arange(tris_len) * 3
+    loop_totals = np.full(tris_len, 3)
+
+    mesh.polygons.foreach_set("loop_start", loop_starts)
+    mesh.polygons.foreach_set("loop_total", loop_totals)
+    mesh.polygons.foreach_set("vertices", triangles.flatten())
+
+    # if tris_len:
+    #     mesh.update(
+    #         calc_edges=bool(tris_len),
+    #         # Flag loose edges.
+    #         calc_edges_loose=bool(False),
+    #     )
+
+# @profile
 def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     # create mesh, replacing old in collection or renaming same-named mesh elsewhere
     active_model : CModel = bpy.context.scene.model
-    faces = []
-    ftemp = [0, 0, 0]
-    face_indices_count = figure.header[3] - 2
-    for i in range(0, face_indices_count, 3):
-        for ind in range(3):
-            ftemp[ind] = figure.v_c[figure.indicies[i + ind]][0]
-        faces.append([ftemp[0], ftemp[1], ftemp[2]])
+
+    n_components = figure.header[3] - figure.header[3] % 3
+    indexes = figure.indicies[:n_components]
+    n_tris = n_components // 3
+    component_indexes = indexes
+    vertex_components = figure.v_c
+    indexed_components = vertex_components[component_indexes]
+    vertex_indices = indexed_components[:, 0]
+    vertex_indices = vertex_indices.reshape((n_tris, 3))
 
     bEtherlord = bpy.context.scene.ether
     if not bEtherlord:
@@ -444,10 +475,19 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     else:
         mesh_count = 1
 
-    for mesh_num in range(mesh_count):
-        collection_name = active_model.morph_collection[mesh_num]
+    print('create meshes for', figure.name)
+
+    # mesh_uvs = np.array(figure.t_coords)
+    mesh_uvs = figure.t_coords
+    uv_indices = indexed_components[:, 1]
+    uvs = mesh_uvs[uv_indices]
+    assert len(uvs) == figure.header[3]
+    uvs_flat = uvs.flatten()
+
+    for i in range(mesh_count):
+        collection_name = active_model.morph_collection[i]
         collection = get_collection(collection_name)
-        name = active_model.morph_comp[mesh_num] + figure.name
+        name = active_model.morph_comp[i] + figure.name
         # remove old mesh
         old_obj_collection = collection.objects.get(name)
         if old_obj_collection:
@@ -456,28 +496,20 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
         if old_obj:
             rename_serial(old_obj, name)
         # insert new mesh
-        base_mesh = bpy.data.meshes.new(name=name)
-        base_obj = bpy.data.objects.new(name, base_mesh)
-        collection.objects.link(base_obj)
+        mesh = bpy.data.meshes.new(name=name)
+        base_obj = bpy.data.objects.new(name, mesh)
         base_obj.location = (0, 0, 0)
-        base_mesh.from_pydata(figure.verts[mesh_num], [], faces)
-        
-        #TODO: create material
-        print('meshname ' + name + ' is creating')
-        base_mesh.uv_layers.new(name=bpy.context.scene.model.name)
-        for uv_ind in range(figure.header[3]):
-            for xy in range(2):
-                base_mesh.uv_layers[0].data[uv_ind].uv[xy] = \
-                        figure.t_coords[figure.v_c[figure.indicies[uv_ind]][1]][xy]
-        print('meshname ' + name + ' created')
-        base_mesh.update()
-    
-def set_pos_2(bone : CBone, container: CItemGroupContainer):
+        collection.objects.link(base_obj)
+        tris_mesh_from_pydata(mesh, figure.verts[i], vertex_indices)
+        # mesh.from_pydata(figure.verts[i], [], vertex_indices)
+        mesh.uv_layers.new(name=bpy.context.scene.model.name)
+        mesh.uv_layers[0].data.foreach_set('uv', uvs_flat)
+        mesh.update()
+
+def set_pos_2(bone : CBone, morph_count):
     active_model : CModel = bpy.context.scene.model
-    item_group = container.get_item_group(bone.name)
-    obj_count = item_group.morph_component_count
     
-    for obj_num in range(obj_count):
+    for obj_num in range(morph_count):
         name = active_model.morph_comp[obj_num] + bone.name
         if name in bpy.data.objects:
             obj = bpy.data.objects[name]
@@ -846,7 +878,7 @@ class ModelExporter:
         uv_data.foreach_get('uv', uvs)
         uvs.shape = (n_vertex, 2)
 
-        packed_uvs = ModelExporter.pack_uv_np(uvs, mesh_group.uv_convert_count, mesh_group.uv_base)
+        packed_uvs = fig_utils.pack_uv_np(uvs, mesh_group.uv_convert_count, mesh_group.uv_base)
         figure.t_coords = packed_uvs
         figure.indicies = np.arange(n_vertex)
 
@@ -855,16 +887,6 @@ class ModelExporter:
         figure.header[2] = len(figure.t_coords)
         figure.header[3] = len(figure.indicies)
         figure.header[4] = len(figure.v_c)
-
-    @staticmethod
-    def pack_uv_np(uvs, count, uv_base=None):
-        if uv_base == (-1, -1) or uv_base is None:
-            uv_base = (0, 1)
-        uv_base = uv_base[0] / 2, uv_base[1] / 2
-        uv_base = np.array(uv_base, dtype=np.float32)
-        for _ in range(count):
-            uvs = uv_base + uvs / 2
-        return uvs
 
     @staticmethod
     # @profile
@@ -878,7 +900,8 @@ class ModelExporter:
         individual_group = ['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left',
                             'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
 
-        for obj in base_coll.objects:
+        len_objects = len(base_coll.objects)
+        for n_obj, obj in enumerate(base_coll.objects):
             if obj.type != 'MESH':
                 continue
             if include_meshes and obj.name not in include_meshes:
@@ -889,6 +912,7 @@ class ModelExporter:
 
             figure.header[7] = export_group.ei_group
             figure.header[8] = export_group.t_number
+            bpy.context.window_manager.progress_update(n_obj/len_objects * 99)
 
             for i in range(obj_count):
                 # TODO: if object has no this morph comp, use previous components (end-point: base)
@@ -941,6 +965,25 @@ def scene_clear():
     '''
     deletes objects, meshes and collections from scene
     '''
+
+    # scene = bpy.context.scene
+    # bpy.data.scenes.new("Scene")
+    # bpy.data.scenes.remove(scene, do_unlink=True)
+    # scene.name = "Scene"
+    # return
+
+    # for collection in bpy.context.scene.collection.children:
+    #     collection.hide_viewport = False
+    #     for obj in collection.objects:
+    #         obj.hide_set(False)
+    #         obj.select_set(True)
+    # bpy.ops.object.delete()
+
+    # prev_ui = bpy.context.area.ui_type
+    # area_type = 'OUTLINER'
+    # bpy.context.area.ui_type = area_type
+    # bpy.ops.outliner.delete(hierarchy=False)
+    # bpy.context.area.ui_type = prev_ui
     for collection in bpy.context.scene.collection.children:
         for obj in collection.objects:
             bpy.data.objects.remove(obj, do_unlink=True)

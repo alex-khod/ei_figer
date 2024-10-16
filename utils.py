@@ -1,5 +1,5 @@
 # Copyright (c) 2022 konstvest
-
+import struct
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
@@ -16,24 +16,19 @@ from argparse import ArgumentError
 import re
 import hashlib #for md5
 from struct import pack, unpack
+import numpy as np
+import re
 
 class CByteReader:
     def __init__(self, raw_data):
         self._offset=0
         self._raw_data = raw_data
-        self._format_table = {'d':8, 'i':4,'f':4 ,'h':2, 's':1}
-
-    def _sizeof(self, format_string):
-        size = 0
-        for char in format_string:
-            size += self._format_table[char]
-        return size
+        self._format_table = {'d': 8, 'i': 4, 'f': 4, 'h': 2, 's': 1}
 
     def read(self, format):
-        size = self._sizeof(format)
+        size = struct.calcsize(format)
         value = unpack(format, self._raw_data[self._offset:self._offset+size])
         if 's'*len(format) == format:
-            #string
             value = b''.join(value)
         if len(value) == 1:
             value = value[0]
@@ -156,30 +151,34 @@ def mulVector(vec1, scalar): #multiply vector with scalar
         result.append(vec1[i] * scalar)
     return result
 
+def unpack_uv_np(uvs, count, uv_base=None):
+    if uv_base == (-1, -1) or uv_base is None:
+        uv_base = (0, 1)
+    uv_base = uv_base[0], uv_base[1]
+    uv_base = np.array(uv_base, dtype=np.float32)
+    for _ in range(count):
+        uvs = uvs * 2 - uv_base
+    return uvs
+
+def pack_uv_np(uvs, count, uv_base=None):
+    if uv_base == (-1, -1) or uv_base is None:
+        uv_base = (0, 1)
+    uv_base = uv_base[0] / 2, uv_base[1] / 2
+    uv_base = np.array(uv_base, dtype=np.float32)
+    for _ in range(count):
+        uvs = uv_base + uvs / 2
+    return uvs
+
 def unpack_uv(uv_, count, uv_base=None):
     '''
     increases x,y value 2 times per side and offset by y(vertically)
     '''
-    if uv_base==(-1, -1):
-        unpack_uv_old(uv_, count)
-        print('uvcount is  ' + str(count) +' uv_base is ' + str(uv_base))
-    else:
-        uv_base = uv_base or (0, 1)
-        for _ in range(count):
-            for uv_convert in uv_:
-                uv_convert[0] = uv_convert[0] * 2 - uv_base[0]
-                uv_convert[1] = uv_convert[1] * 2 - uv_base[1]
-                #uv_convert[0] = uv_convert[0]
-                #uv_convert[1] = uv_convert[1]
-
-def unpack_uv_old(uv_, count):
-    '''
-    increases x,y value 2 times per side and offset by y(vertically)
-    '''
+    if uv_base == (-1, -1) or uv_base is None:
+        uv_base = (0, 1)
     for _ in range(count):
         for uv_convert in uv_:
-            uv_convert[0] *= 2
-            uv_convert[1] = uv_convert[1] * 2 - 1
+            uv_convert[0] = uv_convert[0] * 2 - uv_base[0]
+            uv_convert[1] = uv_convert[1] * 2 - uv_base[1]
             
 def pack_uv(uv_, count, uv_base=None):
     '''

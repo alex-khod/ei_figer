@@ -12,9 +12,11 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from . utils import CByteReader, unpack_uv, pack_uv, pack, unpack, \
-    read_x, read_xy, read_xyz, read_xyzw, write_xy, write_xyz, write_xyzw, get_uv_params, get_uv_group_name, get_uv_convert_count, get_uv_base
-from . bone import CBone
+
+import struct
+from . import utils as fig_utils
+
+import numpy as np
 
 class CFigure(object):
     '''
@@ -54,6 +56,8 @@ class CFigure(object):
             # don't attempt to compare against unrelated types
             return NotImplemented
 
+        return NotImplemented
+
         is_equal = self.header == other.header and self.center == other.center and self.fmin == other.fmin
         is_equal = is_equal and self.fmax == other.fmax and self.radius == other.radius
         is_equal = is_equal and self.indicies == other.indicies and self.v_c == other.v_c
@@ -63,20 +67,15 @@ class CFigure(object):
 
         return is_equal
 
-
-
     def read_fig(self, name, raw_data : bytearray):
         self.name = name
-        parser = CByteReader(raw_data)
-        print(' Name: ' + name)
-
+        parser = fig_utils.CByteReader(raw_data)
+        print('Name: ' + name)
         signature = parser.read('ssss').decode()
-#        signature = parser.read('i')
         print('signature is ' + str(signature))
         if signature != 'FIG8':
             print(self.name + ' has not FIG8 figure signature: ' + signature)
-        #    return 2
-        if signature == 'FIG8':           ##LostSoul
+        if signature == 'FIG8':
             self.morph_count = 8
         elif signature == 'FIG6':
             self.morph_count = 6
@@ -84,25 +83,15 @@ class CFigure(object):
             self.morph_count = 4
         else:    
             self.morph_count = 1
-        # header
+
         print(self.name + ' have morph_count is ' + str(self.morph_count))
-        
+
         for i in range(9):
             self.header[i] = parser.read('i')
 #            print('self.header[i] is ' + str(self.header[i]))
         # Center
         for _ in range(self.morph_count):
             Center = self.center.append(parser.read('fff'))
-
-
-        #data = bon_res.read()
-#        bon = CBone()
-        #bon.read_bon(bon_name, data)
-        #active_model.pos_list.append(bon)
-#        bon.read_bonvec(name + '.bon', Center)
-#        self.pos_list.append(bon)
-
-#        print('self.center is ' + str(self.center))
         # MIN
         for _ in range(self.morph_count):
             self.fmin.append(parser.read('fff'))
@@ -116,49 +105,48 @@ class CFigure(object):
             self.radius.append(parser.read('f'))
 #        print('self.radius is ' + str(self.radius))
         # VERTICES
-        block = [[[0 for _ in range(3)] for _ in range(8)] for _ in range(4)]
-        for _ in range(self.header[0]):
-            for xyz in range(3):
-                for i in range(self.morph_count):  #morphing component
-                    for cur_block in range(4):  #block with 4 verts
-                        block[cur_block][i][xyz] = parser.read('f')
-#                            block[cur_block][i][xyz] = parser.read('h')
-            #convert verts from block 4*n to 1-row data
-            for cur_block in range(4):
-                for i in range(self.morph_count):
-                    self.verts[i].append(tuple(block[cur_block][i][0:3]))
-        del block
+        n_vertex_blocks = self.header[0]
+        # block is XXXX * morph_count, YYYY * morph_count, ZZZZ * morph_count
+        # 3 coords (XYZ) * morph_count * 4 coords (XXXX)
+        n_floats_per_block = 3 * self.morph_count * 4
+        vertex_data = parser.read('%uf' % (n_vertex_blocks * n_floats_per_block))
+        vertices = np.array(vertex_data).reshape(n_vertex_blocks, 3, self.morph_count, 4)
+        # reorder axes. black magic?
+        vertices = vertices.transpose(2, 0, 3, 1)
+        # XYZ * 4 * n_vertex blocks (for morph 1), same for morph 2, etc...
+        vertices = vertices.reshape(self.morph_count, n_vertex_blocks * 4, 3)
+        self.verts = vertices
         # NORMALS
-        for i in range(self.header[1]*4): #normal count * block_size(4)
-            self.normals.append(parser.read('ffff'))
+        n_normal4_blocks = self.header[1]
+        n_normals = n_normal4_blocks * 4
+        normal_data = parser.read('%uf' % (n_normals * 4))
+        self.normals = np.array(normal_data).reshape(n_normals, 4)
         # TEXTURE COORDS
-        for _ in range(self.header[2]):
-            t_coord = parser.read('ff')            
-            self.t_coords.append(list(t_coord))
-        unpack_uv(self.t_coords, *get_uv_params(self.name))
-        #print(self.name + ' item group is  ' + str(get_uv_group_name(self.name)) +' uvpar is ' + get_uv_params(self.name))
-        #print(self.name  +' uvcount is ' + str(get_uv_convert_count(self.name)))
-        print(self.name + ' item group is  ' + str(get_uv_group_name(self.name)) +' uvcount is ' + str(get_uv_convert_count(self.name))  + ' uvbase ' + str(get_uv_base(self.name)))
-       
+        n_texcoords = self.header[2]
+        texcoords_data = parser.read('%uf' % (n_texcoords * 2))
+        texcoords = np.array(texcoords_data).reshape(n_texcoords, 2)
+        convert_count, uv_base = fig_utils.get_uv_params(self.name)
+        # unpack
+        packed_uvs = fig_utils.unpack_uv_np(texcoords, convert_count, uv_base)
+        self.t_coords = packed_uvs
+        # convert_count, uv_base = fig_utils.get_uv_params(self.name)
+        # packed_uvs = fig_utils.unpack_uv_np(texcoords, convert_count, uv_base)
+        # fig_utils.unpack_uv(texcoords, convert_count, uv_base)
+        # self.t_coords = packed_uvs
         # INDICES
-        for _ in range(self.header[3]):
-            self.indicies.append(parser.read('h'))
-        # VERTICES COMPONENTS
-        for _ in range(self.header[4]):
-            parser.read('h') #TODO: fix missing data here (vert index)
-            self.v_c.append(parser.read('hh'))
-        # MORHING COMPONENTS
-        for _ in range(self.header[5]):
-            self.m_c.append(parser.read('hh'))
-
-        
+        n_indicies = self.header[3]
+        self.indicies = np.array(parser.read('%uh' % n_indicies))
+        # VERTEX COMPONENTS
+        n_components = self.header[4]
+        vertex_components = np.array(parser.read('%uh' % (n_components * 3))).reshape((n_components, 3))
+        # drop first component
+        self.v_c = vertex_components[:, 1:]
+        # MORPHING COMPONENTS
+        n_morphs = self.header[5]
+        self.m_c = np.array(parser.read('%uh' % (n_morphs * 2))).reshape((n_morphs, 2))
         if parser.is_EOF():
             print('EOF reached')
             return 0
-#        something = parser.read('i')
-#        print('name = ' + name)
-#        print('trans_count = ' + str(trans_count))
-#        print('something = ' + str(something))           
         return 1
 
     def write_fig(self):
@@ -172,6 +160,8 @@ class CFigure(object):
             print('morph components count corrupted')
         if len(self.center) != 8 or len(self.fmin) != 8 or len(self.fmax) != 8 or len(self.center) != 8:
             print('aux data components count corrupted')
+
+        pack = struct.pack
         raw_data = pack('4s', b'FIG8')
         # header
         assert(len(self.header) == 9)
@@ -189,36 +179,15 @@ class CFigure(object):
         for rad in self.radius:
             raw_data += pack('f', rad)
         # verts
-        block_index = 0
-        vertex_items = []
-        for _ in range(self.header[0]):
-            for xyz in range(3):
-                for i in range(self.morph_count):
-                    for cur_block_ind in range(4):
-                        # [xxxx * morph_count, yyyy * morph_count, zzzz * morph_count]
-                        vertex_items.append(self.verts[i][block_index + cur_block_ind][xyz])
-            block_index += 4
-        vertex_data = pack('%uf' % len(vertex_items), *vertex_items)
+        n_vertex_blocks = self.header[0]
+        # [xyz xyz xyz xyz] * n_vertices4 * n_morph_count
+        verts = np.concatenate(self.verts)
+        # [XXXX * morph_count, YYYY * morph_count, ZZZZ * morph_count] * n_vertices4
+        vertex_data = verts.reshape(self.morph_count, n_vertex_blocks, 4, 3).transpose(1, 3, 0, 2).tobytes()
         raw_data += vertex_data
         # normals
-        block_index = 0
-        normal_items = []
-        for _ in range(self.header[1]):
-            for xyzw in range(4):
-                    for cur_block_ind in range(4):
-                        # [xxxx yyyy zzzz wwww]
-                        normal_items.append(self.normals[block_index + cur_block_ind][xyzw])
-            block_index += 4
-        normal_data = pack('%uf' % len(normal_items), *normal_items)
-        raw_data += normal_data
-        # texture coordinates
-        import copy
-        packed_uvs = self.t_coords
-        # packed_uvs = copy.deepcopy(self.t_coords)
-        # NOTE: mutating function
-        # pack_uv(packed_uvs, *get_uv_params(self.name))
-        # uv_items = [uv for uvs in packed_uvs for uv in uvs]
-        # uvs_chunk2 = pack('%sf' % len(uv_items), *uv_items)
+        n_normal4_blocks = self.header[1]
+        raw_data += self.normals.reshape(n_normal4_blocks, 4, 4).transpose(0, 2, 1).tobytes()
         assert self.t_coords.dtype == 'f'
         uvs_chunk = self.t_coords.tobytes()
         raw_data += uvs_chunk
@@ -231,67 +200,6 @@ class CFigure(object):
         morph_components = [co for m_c in self.m_c for co in m_c]
         raw_data += pack('%sh' % len(morph_components), *morph_components)
         return raw_data
-
-    def import_fig(self, fig_path):
-        '''
-        Reads data from figure file
-        '''
-        with open(fig_path, 'rb') as fig_file:
-            # SIGNATURE
-            if fig_file.read(4) != b'FIG8':
-                print('figure header is not correct')
-                return 2
-
-            # HEADER
-            for ind in range(9):
-                self.header[ind] = unpack('i', fig_file.read(4))[0]
-            # Center
-            for _ in range(self.morph_count):
-                self.center.append(read_xyz(fig_file))
-            # MIN
-            for _ in range(self.morph_count):
-                self.fmin.append(read_xyz(fig_file))
-            # MAX
-            for _ in range(self.morph_count):
-                self.fmax.append(read_xyz(fig_file))
-            # Radius
-            for _ in range(self.morph_count):
-                self.radius.append(unpack('f', fig_file.read(4))[0])
-            # VERTICES
-            block = [[[0 for _ in range(3)] for _ in range(8)] for _ in range(4)]
-            for _ in range(self.header[0]):
-                for xyz in range(3):
-                    for i in range(self.morph_count):  #morphing component
-                        for cur_block in range(4):  #block with 4 verts
-                            block[cur_block][i][xyz] = unpack('f', fig_file.read(4))[0]
-                #convert verts from block 4*n to 1-row data
-                for cur_block in range(4):
-                    for i in range(self.morph_count):
-                        self.verts[i].append(tuple(block[cur_block][i][0:3]))
-            del block
-            # NORMALS
-            for i in range(self.header[1]*4): #normal count * block_size(4)
-                self.normals.append(read_xyzw(fig_file))
-            # TEXTURE COORDS
-            for _ in range(self.header[2]):
-                t_coord = read_xy(fig_file)
-                self.t_coords.append(list(t_coord))
-            unpack_uv(self.t_coords, *get_uv_params(self.name))
-            # INDICES
-            for _ in range(self.header[3]):
-                self.indicies.append(read_x(fig_file))
-            # VERTICES COMPONENTS
-            for _ in range(self.header[4]):
-                fig_file.read(2) #TODO: fix missing data here (vert index)
-                self.v_c.append(read_xy(fig_file, 'short'))
-            # MORHING COMPONENTS
-            for _ in range(self.header[5]):
-                self.m_c.append(read_xy(fig_file, 'short'))
-            
-            if fig_file.read(1) == b'':
-                # print('EOF reached')
-                return 0
-        return 1
     
     def fillVertices(self):
         for i in range(1, 8):
