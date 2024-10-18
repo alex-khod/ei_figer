@@ -15,16 +15,18 @@ import importlib
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import bpy
 import os
+import io
 import time
 from bpy_extras.io_utils import ImportHelper
 from . import scene_utils
+from . import figure
 from . figure import CFigure
 from . bone import CBone
 from . links import CLink
-from . utils import *
-from . scene_management import CModel
 from . resfile import ResFile
-from . scene_utils import *
+from . import utils as fig_utils
+from .scene_utils import model, clear_unlinked_data
+
 
 def get_duration(fn):
     start_time = time.time()
@@ -36,7 +38,7 @@ def get_name(cls, mesh_mask):
     if mesh_mask:
         text = str(len(mesh_mask.split(',')))
     else:
-        base_coll = get_collection("base")
+        base_coll = scene_utils.get_collection("base")
         text = str(len(base_coll.objects)) if base_coll else "all"
     return cls.bl_label % text
 
@@ -55,7 +57,7 @@ class CRefreshTestTable(bpy.types.Operator):
         bpy.types.Scene.model.pos_lost = []
         bpy.types.Scene.model.fig_table.clear()
         bpy.types.Scene.model.bon_table.clear()
-        to_object_mode()
+        scene_utils.to_object_mode()
 
         # find base objects
         for obj in bpy.data.objects:
@@ -91,7 +93,7 @@ class CRefreshTestTable(bpy.types.Operator):
         linker.create_hierarchy(tu_dict)
         for p_ind in bpy.types.Scene.model.pos_lost:
             bpy.types.Scene.model.bon_table[p_ind].set_pos('non')
-        calculate_mesh(self, context)
+        scene_utils.calculate_mesh(self, context)
         return {'FINISHED'}
 
 class CAddMorphComp_OP_Operator(bpy.types.Operator):
@@ -103,8 +105,6 @@ class CAddMorphComp_OP_Operator(bpy.types.Operator):
         #prefix = bpy.context.scene.morph_comp
     
         def addMorphComp(prefix):
-                
-                  
             links = dict()
             childs = dict()
             clear_unlinked_data()
@@ -443,7 +443,7 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
         
-        item = CItemGroupContainer().get_item_group(model().name)
+        item = fig_utils.CItemGroupContainer().get_item_group(model().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
@@ -510,7 +510,7 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
         
-        item = CItemGroupContainer().get_item_group(model().name)
+        item = fig_utils.CItemGroupContainer().get_item_group(model().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
@@ -564,7 +564,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
         
-        item = CItemGroupContainer().get_item_group(model().name)
+        item = fig_utils.CItemGroupContainer().get_item_group(model().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
@@ -578,7 +578,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
         # Триангулируем и применяем модификаторы на базовой модели
         bAutofix = bpy.context.scene.auto_apply
         if bAutofix:
-            auto_fix_scene()
+            scene_utils.auto_fix_scene()
 
         scn = scene
         scaled = scn.scaled
@@ -662,7 +662,7 @@ class CSelectResFileIndex(bpy.types.Operator):
     )
 
     def execute(self, context):
-        context.scene.res_file = get_res_file_buffer(self.res_file_index)
+        context.scene.res_file = scene_utils.get_res_file_buffer(self.res_file_index)
         return {'FINISHED'}
 
 class CChooseResFile(bpy.types.Operator, ImportHelper):
@@ -701,8 +701,11 @@ class CClear_OP_operator(bpy.types.Operator):
     bl_description = 'Should be pretty obvious'
 
     def execute(self, context: bpy.types.Context) -> set[str]:
+
+        importlib.reload(scene_utils)
+
         bpy.context.window_manager.progress_begin(0, 100)
-        _, duration = get_duration(lambda : scene_clear())
+        _, duration = get_duration(lambda : scene_utils.scene_clear())
         bpy.context.window_manager.progress_end()
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
@@ -794,7 +797,7 @@ class CExport_OP_operator(bpy.types.Operator):
 
         bAutofix = bpy.context.scene.auto_fix
         if bAutofix:
-            auto_fix_scene()
+            scene_utils.auto_fix_scene()
 
         if not scene_utils.is_model_correct(model_name):
             self.report({'ERROR'},
@@ -860,15 +863,15 @@ class CAnimation_OP_import(bpy.types.Operator):
                 return {'CANCELLED'}
 
         # fix names for base collection being imported
-        scene_utils.rename_drop_postfix(get_collection("base").objects)
-        animations = read_animations(resFile, model_name, anm_name)
-        links = collect_links()  # Lost Soul - fix for rewrite animations after close file
-        ei2abs_rotations(links, animations)
+        scene_utils.rename_drop_postfix(scene_utils.get_collection("base").objects)
+        animations = scene_utils.read_animations(resFile, model_name, anm_name)
+        links = scene_utils.collect_links()  # Lost Soul - fix for rewrite animations after close file
+        scene_utils.ei2abs_rotations(links, animations)
         bAutofix = bpy.context.scene.animsubfix
         if not bAutofix:
-            abs2Blender_rotations(links, animations)
+            scene_utils.abs2Blender_rotations(links, animations)
 
-        insert_animation(self.target_collection, animations)
+        scene_utils.insert_animation(self.target_collection, animations)
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
 
@@ -907,14 +910,14 @@ class CAnimation_OP_Export(bpy.types.Operator):
 
         # fix names for collection being exported
         export_from_name = self.target_collection
-        scene_utils.rename_drop_postfix(get_collection(export_from_name).objects)
+        scene_utils.rename_drop_postfix(scene_utils.get_collection(export_from_name).objects)
 
         context.scene.frame_start, context.scene.frame_end = scene_utils.get_collection_frame_range(export_from_name)
 
-        links = collect_links(export_from_name)
-        animations = collect_animations(export_from_name)
-        blender2abs_rotations(links, animations)
-        abs2ei_rotations(links, animations)
+        links = scene_utils.collect_links(export_from_name)
+        animations = scene_utils.collect_animations(export_from_name)
+        scene_utils.blender2abs_rotations(links, animations)
+        scene_utils.abs2ei_rotations(links, animations)
 
         def write_animations(res_path, model_name, anm_name):
             #pack crrent animation first. byte array for each part (lh1, lh2, etc)
