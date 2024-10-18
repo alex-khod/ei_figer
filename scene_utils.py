@@ -44,13 +44,29 @@ except ImportError:
     print("No profilehooks")
     pass
 
+class TemporaryContext:
+
+    def __init__(self, temp_ui):
+        self.temp_ui = temp_ui
+        self.prev_ui = None
+
+    def __enter__(self):
+        self.prev_ui = bpy.context.area.ui_type
+        bpy.context.area.ui_type = self.temp_ui
+
+    def __exit__(self, exc_type, exc_value, tb):
+        if exc_type is not None:
+            import traceback
+            traceback.print_exception(exc_type, exc_value, tb)
+        bpy.context.area.ui_type = self.prev_ui
+
 def profile(func):
     if profilehooks is not None:
         return profilehooks.profile(immediate=True)(func)
     else:
         return func
 
-def model() -> CModel:
+def MODEL() -> CModel:
     return bpy.context.scene.model
 
 def get_collection(collection_name = "base") -> bpy.types.Collection:
@@ -215,7 +231,8 @@ def create_model_meshes(links: CLink, include_meshes=None):
     active_model: CModel = bpy.types.Scene.model
 
     bpy.context.window_manager.progress_update(15)
-    clear_morph_collections()
+    if not include_meshes:
+        clear_morph_collections(start_index=0)
     bpy.context.window_manager.progress_update(30)
     container = CItemGroupContainer()
     item_group = container.get_item_group(active_model.name)
@@ -223,7 +240,7 @@ def create_model_meshes(links: CLink, include_meshes=None):
 
     len_meshes = len(active_model.mesh_list)
     for i, fig in enumerate(active_model.mesh_list):
-        bpy.context.window_manager.progress_update(30 + int(i / len_meshes * 50))
+        bpy.context.window_manager.progress_update(30 + (i / len_meshes * 50))
         create_mesh_2(fig, item_group)
     create_links_2(links, item_group.morph_component_count)
     for bone in active_model.pos_list:
@@ -249,14 +266,15 @@ def export_model(context, res_path, model_name, include_meshes=None):
     active_model.name = model_name
 
     collect_pos(model_name, include_meshes)
-    ModelExporter.collect_mesh(include_meshes)
+    is_export_unique = context.scene.is_export_unique
+    ModelExporter.collect_mesh(include_meshes, is_export_unique)
 
     # backup_path = res_path + ".backup"
     # with open(res_path, "wb") as dst:
     #     with open(backup_path, "rb") as src:
     #         dst.write(src.read())
 
-    obj_count = CItemGroupContainer().get_item_group(model().name).morph_component_count
+    obj_count = CItemGroupContainer().get_item_group(MODEL().name).morph_component_count
     if obj_count == 1:  # save lnk,fig,bon into res (without model resfile)
         with ResFile(res_path, 'a') as res:
             with res.open(active_model.name + '.lnk', 'w') as file:
@@ -294,6 +312,7 @@ def export_model(context, res_path, model_name, include_meshes=None):
             # write lnk
             with res.open(active_model.name, 'w') as file:
                 data = links.write_lnk()
+
                 file.write(data)
             # write meshes
             for part in active_model.mesh_list:
@@ -417,19 +436,6 @@ def blender2abs_rotations(links: CLink, animations: CAnimations):
 
     return 0
 
-
-def clear_old_morphs(start_index=1, include_meshes=None):
-    # base_meshes = set([obj.name for obj in get_collection("base").objects])
-    for coll_name, coll_prefix in zip(model().morph_collection[start_index:], model().morph_comp[start_index:]):
-        coll = get_collection(coll_name)
-        if not coll:
-            continue
-        for obj in coll.objects:
-            # or (coll_prefix + obj.name) not in base_meshes:
-            if (include_meshes and obj.name in include_meshes):
-                bpy.data.objects.remove(obj)
-    return True
-
 def tris_mesh_from_pydata(mesh: bpy.types.Mesh, vertices: np.array, triangles: np.array):
     vertices_len = len(vertices)
     tris_len = len(triangles)
@@ -460,9 +466,9 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     # create mesh, replacing old in collection or renaming same-named mesh elsewhere
     active_model : CModel = bpy.context.scene.model
 
-    n_components = figure.header[3] - figure.header[3] % 3
-    indexes = figure.indicies[:n_components]
-    n_tris = n_components // 3
+    n_indices = figure.header[3] - figure.header[3] % 3
+    indexes = figure.indicies[:n_indices]
+    n_tris = n_indices // 3
     component_indexes = indexes
     vertex_components = figure.v_c
     indexed_components = vertex_components[component_indexes]
@@ -479,7 +485,7 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
 
     # mesh_uvs = np.array(figure.t_coords)
     mesh_uvs = figure.t_coords
-    uv_indices = indexed_components[:, 1]
+    uv_indices = indexed_components[:, 2]
     uvs = mesh_uvs[uv_indices]
     assert len(uvs) == figure.header[3]
     uvs_flat = uvs.flatten()
@@ -666,6 +672,22 @@ def create_hierarchy(links : dict[str, str]):
         else:
             print(str(key) + ': object not found in scene, but found in links of hierarchy')
 
+
+def check_morph_items(base_collection, morph_collection: bpy.types.Collection, morph_prefix):
+    bad_objects = []
+    for base_obj in base_collection.objects:
+        base_obj: bpy.types.Object
+        name = morph_prefix + base_obj.name
+        obj = morph_collection.objects.get(name)
+        if not obj:
+            print (f"Missing morph object {name}")
+            bad_objects.append(name)
+            continue
+        if len(base_obj.data.vertices) != len(obj.data.vertices):
+            print(f"Uneqal mesh length for mesh {name}")
+            bad_objects.append(name)
+    return bad_objects
+
 def is_model_correct(model_name):
     obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
     print(obj_count)
@@ -674,13 +696,27 @@ def is_model_correct(model_name):
         print('scene empty')
         return False
 
-    for coll_name in model().morph_collection:
+    missing_morphs = []
+    for coll_name in MODEL().morph_collection:
         if bpy.data.collections.get(coll_name) is None:
-            print('no "%s" collection found ' % coll_name)
+            missing_morphs.append(coll_name)
+
+    if missing_morphs:
+        morph_list = ','.join(missing_morphs)
+        print('No "%s" morph collection found. \nProbably should create morphs using `Create all morphs`' % morph_list)
+        return False
+
+    base_collection = get_collection("base")
+    bad_objects = []
+    for morph_name, prefix in zip(MODEL().morph_collection[1:], MODEL().morph_prefixes[1:]):
+        morph_collection = get_collection(morph_name)
+        bad_objects.extend(check_morph_items(base_collection, morph_collection, prefix))
+    if bad_objects:
+        return False
+
     bEtherlord = bpy.context.scene.ether
 
     root_list = []
-
     base_coll = get_collection()
     #check if root object only 1
     for obj in base_coll.objects:
@@ -695,11 +731,10 @@ def is_model_correct(model_name):
             print('mesh ' + mesh.name + ' has no active uv layer (UV map)')
             return False
 
-
         for i in range(obj_count):
-            morph_coll = bpy.data.collections.get(model().morph_collection[i])
-            if (model().morph_comp[i] + obj.name) not in morph_coll.objects:
-                print('cannot find object: ' + model().morph_comp[i] + obj.name)
+            morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
+            if (MODEL().morph_comp[i] + obj.name) not in morph_coll.objects:
+                print('cannot find object: ' + MODEL().morph_comp[i] + obj.name)
                 return False
 
     if len(root_list) != 1:
@@ -707,7 +742,7 @@ def is_model_correct(model_name):
 
     #check assembly name
     for obj in base_coll.objects:
-        if obj.name == model().name:
+        if obj.name == MODEL().name:
             print(f'object {obj.name} must not be the same as model name. input another name for model or object')
             return False
 
@@ -759,7 +794,7 @@ def collect_pos(model_name, include_meshes=None):
     err = 0
     obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
     base_coll = get_collection()
-    #model().pos_list.clear()
+    #MODEL().pos_list.clear()
     for obj in base_coll.objects:
         if obj.type != 'MESH':
             continue
@@ -767,9 +802,9 @@ def collect_pos(model_name, include_meshes=None):
             continue
         bone = CBone()
         for i in range(obj_count):
-            morph_coll = bpy.data.collections.get(model().morph_collection[i])
+            morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
             #TODO: if object has no this morph comp, use previous components (end-point: base)
-            morph_obj = morph_coll.objects[model().morph_comp[i] + obj.name]
+            morph_obj = morph_coll.objects[MODEL().morph_comp[i] + obj.name]
             bone.pos.append(morph_obj.location[:])
             #print(str(obj.name) + '.bonename, objcount' + str(obj_count) + ' loc ' + str(morph_obj.location[:]))
        
@@ -778,7 +813,7 @@ def collect_pos(model_name, include_meshes=None):
         if obj_count == 1:
             bone.fillPositions()
 
-        model().pos_list.append(bone)
+        MODEL().pos_list.append(bone)
     return err
 
 class ModelExporter:
@@ -809,7 +844,7 @@ class ModelExporter:
             figure.fmax[-1] = tuple(subVector(figure.fmax[-1], figure.center[-1]))
 
     @staticmethod
-    def calculate_figure_bounds_np(obj_group, figure: CFigure, vertices):
+    def calculate_figure_bounds_np(figure: CFigure, vertices, obj_group):
         min_m = vertices.min(axis=0)
         max_m = vertices.max(axis=0)
 
@@ -841,59 +876,10 @@ class ModelExporter:
         return padded
 
     @staticmethod
-    def collect_base_mesh_simple(figure, mesh: bpy.types.Mesh):
-        # export base mesh
-        figure.t_coords = []
-        figure.v_c = []
-        uv_data = mesh.uv_layers.active.data
-
-        for loop_index, loop in enumerate(mesh.loops):
-            vertex_index = loop.vertex_index
-            uv = uv_data[loop_index].uv
-            figure.t_coords.append([uv[0], uv[1]])
-            uv_index = len(figure.t_coords) - 1
-            figure.v_c.append((vertex_index, uv_index))
-            vc_index = len(figure.v_c) - 1
-            figure.indicies.append(vc_index)
-
-        figure.header[0] = int(len(figure.verts[0]) / 4)
-        figure.header[1] = int(len(figure.normals) / 4)
-        figure.header[2] = len(figure.t_coords)
-        figure.header[3] = len(figure.indicies)
-        figure.header[4] = len(figure.v_c)
-
-    @staticmethod
-    def collect_base_mesh_simple_np(figure, mesh: bpy.types.Mesh, mesh_group: CItemGroup):
-        n_vertex = len(mesh.loops)
-
-        vertex_components = np.zeros((n_vertex, 2), dtype=np.int)
-        vertex_indices = np.zeros(n_vertex, dtype=np.int)
-        mesh.loops.foreach_get('vertex_index', vertex_indices)
-        vertex_components[:, 0] = vertex_indices
-        vertex_components[:, 1] = np.arange(n_vertex)
-        figure.v_c = vertex_components
-        # uvs
-        uv_data = mesh.uv_layers.active.data
-        uvs = np.zeros(n_vertex * 2, np.float32)
-        uv_data.foreach_get('uv', uvs)
-        uvs.shape = (n_vertex, 2)
-
-        packed_uvs = fig_utils.pack_uv_np(uvs, mesh_group.uv_convert_count, mesh_group.uv_base)
-        figure.t_coords = packed_uvs
-        figure.indicies = np.arange(n_vertex)
-
-        figure.header[0] = int(len(figure.verts[0]) / 4)
-        figure.header[1] = int(len(figure.normals) / 4)
-        figure.header[2] = len(figure.t_coords)
-        figure.header[3] = len(figure.indicies)
-        figure.header[4] = len(figure.v_c)
-
-    @staticmethod
-    # @profile
-    def collect_mesh(include_meshes=None):
-        # include_meshes = {"hd.armor28"}
-        model().mesh_list = []
-        model_group = CItemGroupContainer().get_item_group(model().name)
+    def collect_mesh(include_meshes=None, collect_unique=False):
+        # collect object meshes into CFigure
+        MODEL().mesh_list = []
+        model_group = CItemGroupContainer().get_item_group(MODEL().name)
         obj_count = model_group.morph_component_count
         base_coll = get_collection()
 
@@ -906,6 +892,7 @@ class ModelExporter:
                 continue
             if include_meshes and obj.name not in include_meshes:
                 continue
+
             figure = CFigure()
             mesh_group = CItemGroupContainer().get_item_group(obj.name)
             export_group = mesh_group if mesh_group.type in individual_group else model_group
@@ -913,69 +900,116 @@ class ModelExporter:
             figure.header[7] = export_group.ei_group
             figure.header[8] = export_group.t_number
             bpy.context.window_manager.progress_update(n_obj/len_objects * 99)
-
+            inverse_vertex_idx = None
+            unique_vertex_idx = None
+            inverse_normal_idx = None
             for i in range(obj_count):
                 # TODO: if object has no this morph comp, use previous components (end-point: base)
-                morph_coll = bpy.data.collections.get(model().morph_collection[i])
-                morph_mesh: bpy.types.Mesh = morph_coll.objects[model().morph_comp[i] + obj.name].data
+                morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
+                morph_mesh: bpy.types.Mesh = morph_coll.objects[MODEL().morph_comp[i] + obj.name].data
                 n_vertex = len(morph_mesh.vertices)
                 vertices = np.zeros(n_vertex * 3, np.float32)
                 morph_mesh.vertices.foreach_get('co', vertices)
                 vertices.shape = (n_vertex, 3)
-                morph_components = len(morph_mesh.vertices)
-                ModelExporter.calculate_figure_bounds_np(mesh_group, figure, vertices)
-                padded_vertices = ModelExporter.align_length_by_4_np(vertices)
-                figure.verts[i] = padded_vertices
+                if collect_unique:
+                    if inverse_vertex_idx is None:
+                        # remove identical vertices. original can be restored as:
+                        # original = unique_val[inverse_idx]
+                        # reindex references / indices:
+                        # reindexed_idx = inverse_idx[idx]
+                        # reorder same-order sequence:
+                        # reordered = normals[unique_idx]
+                        unique_vertices, unique_vertex_idx, inverse_vertex_idx = \
+                            np.unique(vertices, axis=0, return_index=True, return_inverse=True)
+                        vertices = unique_vertices
+                    else:
+                        vertices = vertices[unique_vertex_idx]
+                morph_components = len(vertices)
+                ModelExporter.calculate_figure_bounds_np(figure, vertices, mesh_group)
+                vertices_aligned_4 = ModelExporter.align_length_by_4_np(vertices)
+                figure.verts[i] = vertices_aligned_4
                 if i > 0:
                     continue
+                # base normals. same order as mesh.vertices
                 normals = np.zeros(n_vertex * 3, np.float32)
                 morph_mesh.vertices.foreach_get('normal', normals)
                 normals.shape = (n_vertex, 3)
-                to_pad = (4 - (n_vertex % 4)) % 4
-                normals4 = np.zeros((n_vertex + to_pad, 4), np.float32)
-                normals4[:n_vertex, :-1] = normals
+                mesh_normals = normals
+                # reindexed normals from non-duplicate vertices
+                if unique_vertex_idx is not None:
+                    mesh_normals = normals[unique_vertex_idx]
+                    # normal packing is useless - save 0.001% of model size, maybe. a bit more with rounding
+                    # mesh_normals = mesh_normals.round(2)
+                    # figure.mesh_normals = mesh_normals
+                    # mesh_normals, inverse_normal_idx = np.unique(mesh_normals, axis=0, return_inverse=True)
+                    # diff = len(inverse_normal_idx) - len(mesh_normals)
+                n_normals = len(mesh_normals)
+                to_pad = (4 - (n_normals % 4)) % 4
+                normals_aligned_4 = np.zeros((n_normals + to_pad, 4), np.float32)
+                normals_aligned_4[:n_normals, :-1] = mesh_normals
                 # (x, y, z, 1.0)
-                normals4[:, -1] = 1.0
-                figure.normals = normals4
+                normals_aligned_4[:, -1] = 1.0
+                figure.normals = normals_aligned_4
                 figure.header[5] = morph_components
                 figure.generate_m_c()
-                ModelExporter.collect_base_mesh_simple_np(figure, morph_mesh, mesh_group)
-
+                ModelExporter.collect_base_mesh_np(figure, morph_mesh, mesh_group,
+                                                   inverse_vertex_idx, inverse_normal_idx)
             figure.name = obj.name
             if obj_count == 1:
                 figure.fillVertices()
                 figure.fillAux()
 
-            model().mesh_list.append(figure)
-
+            MODEL().mesh_list.append(figure)
         return True
 
-def clear_unlinked_data():
-    for mesh in bpy.data.meshes:
-        if mesh.users == 0:
-            bpy.data.meshes.remove(mesh)
-    for obj in bpy.data.objects:
-        if obj.users == 0:
-            bpy.data.objects.remove(obj)
-    for col in bpy.data.collections:
-        if col.users == 0:
-            bpy.data.collections.remove(col)
+    @staticmethod
+    def collect_base_mesh_np(figure: CFigure, mesh: bpy.types.Mesh, mesh_group: CItemGroup, inverse_vertex_idx=None,
+                             inverse_normal_idx=None):
+        n_index = len(mesh.loops)
+        vertex_idx = np.zeros(n_index, dtype=np.uint16)
+        mesh.loops.foreach_get('vertex_index', vertex_idx)
+        # uvs
+        uv_data = mesh.uv_layers.active.data
+        uvs = np.zeros(n_index * 2, np.float32)
+        uv_data.foreach_get('uv', uvs)
+        uvs.shape = (n_index, 2)
 
-class TemporaryContext:
+        packed_uvs = fig_utils.pack_uv_np(uvs, mesh_group.uv_convert_count, mesh_group.uv_base)
+        if inverse_vertex_idx is not None:
+            # unique vvs
+            unique_uvs, inverse_uv_idx = np.unique(packed_uvs, axis=0, return_inverse=True)
+            packed_uvs = unique_uvs
+            uv_idx = inverse_uv_idx
+            mapped_vertex_idx = inverse_vertex_idx[vertex_idx]
+        else:
+            uv_idx = np.arange(n_index)
+            mapped_vertex_idx = vertex_idx
 
-    def __init__(self, temp_ui):
-        self.temp_ui = temp_ui
-        self.prev_ui = None
+        figure.t_coords = packed_uvs
+        vertex_components = np.zeros((n_index, 3), dtype=np.uint16)
+        # geom/vertex index, normal index, uv index
+        vertex_components[:, 0] = mapped_vertex_idx
+        normal_idx = mapped_vertex_idx
+        if inverse_normal_idx is not None:
+            normal_idx = inverse_normal_idx[mapped_vertex_idx]
+            # restore original and check
+            normals = figure.normals[normal_idx][:, :3]
+            original_normals = figure.mesh_normals[mapped_vertex_idx]
+            assert ((normals == original_normals).all())
+        vertex_components[:, 1] = normal_idx
+        vertex_components[:, 2] = uv_idx
 
-    def __enter__(self):
-        self.prev_ui = bpy.context.area.ui_type
-        bpy.context.area.ui_type = self.temp_ui
+        vertex_components, inverse_vc_idx = np.unique(vertex_components, axis=0, return_inverse=True)
+        figure.v_c = vertex_components.astype(np.uint16)
+        figure.indicies = inverse_vc_idx.astype(np.uint16)
+        # figure.indicies = np.arange(n_index, dtype=np.uint16)
 
-    def __exit__(self, exc_type, exc_value, tb):
-        if exc_type is not None:
-            import traceback
-            traceback.print_exception(exc_type, exc_value, tb)
-        bpy.context.area.ui_type = self.prev_ui
+        figure.header[0] = int(len(figure.verts[0]) / 4)
+        figure.header[1] = int(len(figure.normals) / 4)
+        figure.header[2] = len(figure.t_coords)
+        figure.header[3] = len(figure.indicies)
+        figure.header[4] = len(figure.v_c)
+
 
 def unhide_collections_recursive(base_collection: bpy.types.LayerCollection=None):
     if base_collection is None:
@@ -995,12 +1029,36 @@ def unhide_objects(base_collection=None):
             obj.hide_set(False)
             obj.select_set(True)
 
-def clear_morph_collections():
-    for collection_name in model().morph_collection:
+def clear_old_morphs(start_index=1, include_meshes=None):
+    return NotImplemented
+    # for coll_name, coll_prefix in zip(MODEL().morph_collection[start_index:], MODEL().morph_comp.values()[start_index:]):
+    #     coll = get_collection(coll_name)
+    #     if not coll:
+    #         continue
+    #     for obj in coll.objects:
+    #         if not include_meshes or obj.name in include_meshes:
+    #             bpy.data.objects.remove(obj)
+    # return True
+
+def clear_morph_collections(start_index=1):
+    for collection_name in MODEL().morph_collection[start_index:]:
         collection = bpy.data.collections.get(collection_name)
         if collection:
             bpy.data.collections.remove(collection)
     bpy.ops.outliner.orphans_purge(do_recursive=True)
+
+def clear_unlinked_data():
+    with TemporaryContext("VIEW_3D"):
+        bpy.ops.outliner.orphans_purge(do_recursive=True)
+    for mesh in bpy.data.meshes:
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+    for obj in bpy.data.objects:
+        if obj.users == 0:
+            bpy.data.objects.remove(obj)
+    for col in bpy.data.collections:
+        if col.users == 0:
+            bpy.data.collections.remove(col)
 
 def scene_clear():
     '''
@@ -1124,7 +1182,6 @@ def auto_fix_scene():
             for modifier in sel.modifiers:
                 #if modifier.type == 'SUBSURF':
                 bpy.ops.object.modifier_apply(modifier=modifier.name)
-
                 # apply transformations
                 bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
                 triangulate(sel)
@@ -1312,89 +1369,90 @@ def copy_collection(copy_from_name, copy_to_name, name_prefix=None):
     copy_recursive(root_objects, to_collection)
     return to_collection, prototypes
 
-def create_all_morphs(context, include_meshes=None):
-    links = dict()
-    # Триангулируем и применяем модификаторы на базовой модели
-    bAutofix = context.scene.auto_apply
-    if bAutofix:
-        auto_fix_scene()
-
-    scn = scene = context.scene
-    scaled = scn.scaled
-
-    #clear_old_morphs(1, include_meshes)
-
-    base_coll = get_collection("base")
-    for obj in base_coll.objects:
-        if obj.type != 'MESH':
-            continue
-        links[obj.name] = obj.parent.name if obj.parent else None
-
-    ensure_morph_collections()
-
-    for obj in base_coll.objects:
+def create_morph_items(base_collection, morph_collection, morph_prefix, include_meshes=None):
+    for obj in base_collection.objects:
         if obj.type != 'MESH':
             continue
         if include_meshes and obj.name not in include_meshes:
             continue
         # добавляем коллекции
-        for i in range(1, 8):
-            coll_name = model().morph_collection[i]
-            coll = scene.collection.children[coll_name]
-            morph_name = model().morph_comp[i] + obj.name
-            if morph_name in coll.objects:
-                bpy.data.objects.remove(coll.objects.get(morph_name))
-            # копируем меши
-            #detect suitable obj
-            new_obj = obj.copy()
-            new_obj.name = morph_name
-            new_obj.data = obj.data.copy()
-            # all my homies hate animation
-            new_obj.animation_data_clear()
-            new_obj.shape_key_clear()
-            new_obj.data.name = new_obj.name
-            coll.objects.link(new_obj)
-            new_obj.select_set(False)
+        morph_name = morph_prefix + obj.name
+        if morph_name in morph_collection.objects:
+            bpy.data.objects.remove(morph_collection.objects.get(morph_name))
+        # копируем меши
+        new_obj = obj.copy()
+        new_obj.name = morph_name
+        new_obj.data = obj.data.copy()
+        new_obj.data.name = new_obj.name
+        morph_collection.objects.link(new_obj)
 
+@profile
+def create_all_morphs(context, include_meshes=None):
+    # Триангулируем и применяем модификаторы на базовой модели
+    bAutofix = context.scene.auto_apply
+    if bAutofix:
+        auto_fix_scene()
+
+    if not include_meshes:
+        clear_morph_collections(start_index=1)
+
+    links = dict()
+    base_collection = get_collection("base")
+
+    # objects = [base_collection.get(name) for name in include_meshes] if include_meshes else base_collection.objects
+
+    for obj in base_collection.objects:
+        if obj.type != 'MESH':
+            continue
+        if include_meshes and obj.name not in include_meshes:
+            continue
+        links[obj.name] = obj.parent.name if obj.parent else None
+        # clear animation from base object. TODO: create copies to preserve animation?
+        obj.animation_data_clear()
+        obj.shape_key_clear()
+
+    ensure_morph_collections()
+
+    for morph_name, morph_prefix in zip(MODEL().morph_collection[1:], list(MODEL().morph_comp.values())[1:]):
+        collection = bpy.data.collections.get(morph_name)
+        create_morph_items(base_collection, collection, morph_prefix, include_meshes)
+
+    scene = context.scene
+    scaled = scene.scaled
     vectors = [
-        (scn.s_s_x, scn.s_s_y, scn.s_s_z),
-        (scn.s_d_x, scn.s_d_y, scn.s_d_z),
-        (scn.s_u_x, scn.s_u_y, scn.s_u_z),
-        (scn.scaled, scn.scaled, scn.scaled),
-        (scaled + scn.s_s_x - 1, scaled + scn.s_s_y - 1, scaled + scn.s_s_z - 1),
-        (scaled + scn.s_d_x - 1, scaled + scn.s_d_y - 1, scaled + scn.s_d_z - 1),
-        (scaled + scn.s_u_x - 1, scaled + scn.s_u_y - 1, scaled + scn.s_u_z - 1),
+        (scene.s_s_x, scene.s_s_y, scene.s_s_z),
+        (scene.s_d_x, scene.s_d_y, scene.s_d_z),
+        (scene.s_u_x, scene.s_u_y, scene.s_u_z),
+        (scaled, scaled, scaled),
+        (scaled + scene.s_s_x - 1, scaled + scene.s_s_y - 1, scaled + scene.s_s_z - 1),
+        (scaled + scene.s_d_x - 1, scaled + scene.s_d_y - 1, scaled + scene.s_d_z - 1),
+        (scaled + scene.s_u_x - 1, scaled + scene.s_u_y - 1, scaled + scene.s_u_z - 1),
     ]
-
-    for obj in bpy.context.selected_objects:
-        obj.select_set(False)
 
     # привязываем родителей
     for s in range(1, 8):
         for child, parent in links.items():
             if parent is None:
                 continue
-            bpy.data.objects[model().morph_comp[s] + child].parent = bpy.data.objects[
-                model().morph_comp[s] + parent]
+            bpy.data.objects[MODEL().morph_comp[s] + child].parent = bpy.data.objects[
+                MODEL().morph_comp[s] + parent]
 
     #Трогаем только scaled коллекции
     for s in range(1, 8):
         for child, parent in links.items():
             if parent is None:
-                bpy.data.objects[model().morph_comp[s] + child].scale = vectors[s - 1]
+                bpy.data.objects[MODEL().morph_comp[s] + child].scale = vectors[s - 1]
 
-    for obj in bpy.context.selected_objects:
-        obj.select_set(False)
-
+    bpy.ops.object.select_all(action='DESELECT')
     for i in range(0, 8):
-        coll_name = model().morph_collection[i]
+        coll_name = MODEL().morph_collection[i]
         coll = bpy.data.collections.get(coll_name)
         for obj in coll.objects:
             if include_meshes and obj.name not in include_meshes:
                 continue
             obj.select_set(True)
-            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-            obj.select_set(False)
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    bpy.ops.object.select_all(action='DESELECT')
 
 def report_info(message, title="Note", icon="INFO"):
     bpy.context.window_manager.popup_menu(lambda self, context: self.layout.label(text=message),

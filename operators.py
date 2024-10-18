@@ -20,12 +20,13 @@ import time
 from bpy_extras.io_utils import ImportHelper
 from . import scene_utils
 from . import figure
+from . import utils as fig_utils
+from . import scene_management
 from . figure import CFigure
 from . bone import CBone
 from . links import CLink
 from . resfile import ResFile
-from . import utils as fig_utils
-from .scene_utils import model, clear_unlinked_data
+from .scene_utils import MODEL, clear_unlinked_data
 
 
 def get_duration(fn):
@@ -41,6 +42,12 @@ def get_name(cls, mesh_mask):
         base_coll = scene_utils.get_collection("base")
         text = str(len(base_coll.objects)) if base_coll else "all"
     return cls.bl_label % text
+
+def reload_modules():
+    importlib.reload(scene_utils)
+    importlib.reload(figure)
+    importlib.reload(fig_utils)
+    importlib.reload(scene_management)
 
 class CRefreshTestTable(bpy.types.Operator):
     bl_label = 'EI refresh test unit'
@@ -110,11 +117,11 @@ class CAddMorphComp_OP_Operator(bpy.types.Operator):
             clear_unlinked_data()
             scene = bpy.context.scene
             def get_true_name(name : str):
-                return name[2:] if name[0:2] in model().morph_comp.values() else name
+                return name[2:] if name[0:2] in MODEL().morph_comp.values() else name
 
-            col_num = list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]
+            col_num = list(MODEL().morph_comp.keys())[list(MODEL().morph_comp.values()).index(prefix)]
             if col_num > 0:
-                previous_col_name = model().morph_collection[col_num-1]
+                previous_col_name = MODEL().morph_collection[col_num - 1]
                 if previous_col_name not in scene.collection.children:
                     self.report({'ERROR'}, 'Previous collection \"'+ previous_col_name +'\" does not exist')
                     return {'CANCELLED'}
@@ -177,7 +184,7 @@ class CAddMorphComp_OP_Operator(bpy.types.Operator):
                 new_obj.data = obj.data.copy()
                 new_obj.data.name = new_obj.name
                 
-                coll_name = model().morph_collection[list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]]
+                coll_name = MODEL().morph_collection[list(MODEL().morph_comp.keys())[list(MODEL().morph_comp.values()).index(prefix)]]
                 if coll_name not in scene.collection.children:
                     new_col = bpy.data.collections.new(coll_name)
                     scene.collection.children.link(new_col)
@@ -212,8 +219,6 @@ class CAddMorphComp_OP_Operator(bpy.types.Operator):
             addMorphComp('g~')
         if bpy.context.scene.morph7:
             addMorphComp('c~')
-
-
         
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
@@ -242,11 +247,11 @@ class CAddMorphCompNamed_OP_Operator(bpy.types.Operator):
             
             
             def get_true_name(name : str):
-                return name[2:] if name[0:2] in model().morph_comp.values() else name
+                return name[2:] if name[0:2] in MODEL().morph_comp.values() else name
 
-            col_num = list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]
+            col_num = list(MODEL().morph_comp.keys())[list(MODEL().morph_comp.values()).index(prefix)]
             if col_num > 0:
-                previous_col_name = model().morph_collection[col_num-1]
+                previous_col_name = MODEL().morph_collection[col_num - 1]
                 if previous_col_name not in scene.collection.children:
                     self.report({'ERROR'}, 'Previous collection \"'+ previous_col_name +'\" does not exist')
                     return {'CANCELLED'}
@@ -323,7 +328,7 @@ class CAddMorphCompNamed_OP_Operator(bpy.types.Operator):
                             bpy.data.objects[new_obj.name].parent = resu
 
 
-                coll_name = model().morph_collection[list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]]
+                coll_name = MODEL().morph_collection[list(MODEL().morph_comp.keys())[list(MODEL().morph_comp.values()).index(prefix)]]
                 if coll_name not in scene.collection.children:
                     new_col = bpy.data.collections.new(coll_name)
                     scene.collection.children.link(new_col)
@@ -371,11 +376,11 @@ class CAddAllMorphComp_OP_Operator(bpy.types.Operator):
         clear_unlinked_data()
         scene = bpy.context.scene
         def get_true_name(name : str):
-            return name[2:] if name[0:2] in model().morph_comp.values() else name
+            return name[2:] if name[0:2] in MODEL().morph_comp.values() else name
 
-        col_num = list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]
+        col_num = list(MODEL().morph_comp.keys())[list(MODEL().morph_comp.values()).index(prefix)]
         if col_num > 0:
-            previous_col_name = model().morph_collection[col_num-1]
+            previous_col_name = MODEL().morph_collection[col_num - 1]
             if previous_col_name not in scene.collection.children:
                 self.report({'ERROR'}, 'Previous collection \"'+ previous_col_name +'\" does not exist')
                 return {'CANCELLED'}
@@ -400,7 +405,7 @@ class CAddAllMorphComp_OP_Operator(bpy.types.Operator):
             new_obj.data = obj.data.copy()
             new_obj.data.name = new_obj.name
             
-            coll_name = model().morph_collection[list(model().morph_comp.keys())[list(model().morph_comp.values()).index(prefix)]]
+            coll_name = MODEL().morph_collection[list(MODEL().morph_comp.keys())[list(MODEL().morph_comp.values()).index(prefix)]]
             if coll_name not in scene.collection.children:
                 new_col = bpy.data.collections.new(coll_name)
                 scene.collection.children.link(new_col)
@@ -434,16 +439,16 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
         if len(collections) < 0:
             self.report({'ERROR'}, 'Scene empty')
             return {'CANCELLED'}
-        if collections[0].name != model().morph_collection[0]:
+        if collections[0].name != MODEL().morph_collection[0]:
             self.report({'ERROR'}, 'Base collection must be named as \"base\"')
             return {'CANCELLED'}
 
-        model().name = bpy.context.scene.figmodel_name
-        if not model().name:
+        MODEL().name = bpy.context.scene.figmodel_name
+        if not MODEL().name:
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
         
-        item = fig_utils.CItemGroupContainer().get_item_group(model().name)
+        item = fig_utils.CItemGroupContainer().get_item_group(MODEL().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
@@ -458,18 +463,18 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
                 continue
             links[obj.name] = None if obj.parent is None else obj.parent.name
             for i in range(1, 8):
-                coll_name = model().morph_collection[i]
+                coll_name = MODEL().morph_collection[i]
                 if coll_name not in scene.collection.children:
                     new_col = bpy.data.collections.new(coll_name)
                     scene.collection.children.link(new_col)
                 coll = scene.collection.children[coll_name]
-                morph_name = model().morph_comp[i]
+                morph_name = MODEL().morph_comp[i]
                 if morph_name in coll.objects:
                     continue
 
                 #detect suitable obj
                 new_obj: bpy.types.Object = obj.copy()
-                new_obj.name = model().morph_comp[i] + obj.name
+                new_obj.name = MODEL().morph_comp[i] + obj.name
                 new_obj.data = obj.data.copy()
                 new_obj.data.name = new_obj.name
                 coll.objects.link(new_obj)
@@ -479,8 +484,8 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
                 for child, parent in links.items():
                     if parent is None:
                         continue
-                    bpy.data.objects[model().morph_comp[i] + child].parent =\
-                        bpy.data.objects[model().morph_comp[i] + parent]
+                    bpy.data.objects[MODEL().morph_comp[i] + child].parent =\
+                        bpy.data.objects[MODEL().morph_comp[i] + parent]
 
 
         return {'FINISHED'}
@@ -488,9 +493,9 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
 class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
     bl_label = 'Create morphs for %s meshes'
     bl_idname = 'object.automorphnew'
-    bl_description = 'Generates morph components based on existing -base- collection' \
-                     'if you have animation going on, transformations will break it' \
-                     'so make a copy beforehand' \
+    bl_description = 'Generates morph components based on existing -base- collection\n' \
+                     'WARN: applies R&S transforms to base collection \n' \
+                     'May break animation or model parent-child positioning'
 
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
@@ -500,17 +505,18 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
 
     def execute(self, context):
         collections = bpy.data.collections
+        self.report({'INFO'}, 'Executing create all morphs')
         base_coll = collections.get("base")
         if not base_coll:
             self.report({'ERROR'}, 'No base collection')
             return {'CANCELLED'}
 
-        model().name = bpy.context.scene.figmodel_name
-        if not model().name:
+        MODEL().name = bpy.context.scene.figmodel_name
+        if not MODEL().name:
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
         
-        item = fig_utils.CItemGroupContainer().get_item_group(model().name)
+        item = fig_utils.CItemGroupContainer().get_item_group(MODEL().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
@@ -518,9 +524,11 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
 
         mesh_mask = self.mesh_mask
         mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
-        
-        clear_unlinked_data()
-        scene_utils.create_all_morphs(context, mesh_mask_set)
+
+        reload_modules()
+        scene_utils.clear_unlinked_data()
+        res, duration = get_duration(lambda : scene_utils.create_all_morphs(context, mesh_mask_set))
+        self.report({'INFO'}, f'Done in {duration:.2f}')
         return {'FINISHED'}
 
 
@@ -555,22 +563,22 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
         if len(collections) < 0:
             self.report({'ERROR'}, 'Scene empty')
             return {'CANCELLED'}
-        if collections[0].name != model().morph_collection[0]:
+        if collections[0].name != MODEL().morph_collection[0]:
             self.report({'ERROR'}, 'Base collection must be named as \"base\"')
             return {'CANCELLED'}
 
-        model().name = bpy.context.scene.figmodel_name
-        if not model().name:
+        MODEL().name = bpy.context.scene.figmodel_name
+        if not MODEL().name:
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
         
-        item = fig_utils.CItemGroupContainer().get_item_group(model().name)
+        item = fig_utils.CItemGroupContainer().get_item_group(MODEL().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
             return {'CANCELLED'}
         def get_true_name(name : str):
-            return name[2:] if name[0:2] in model().morph_comp.values() else name
+            return name[2:] if name[0:2] in MODEL().morph_comp.values() else name
         
         clear_unlinked_data()
         scene = bpy.context.scene
@@ -589,7 +597,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
             for i in range(4, 8):
                 if len(collections) == 1:
                     continue
-                coll_name = model().morph_collection[i]
+                coll_name = MODEL().morph_collection[i]
                 for obj in collections[i].objects:
                     if obj.type != 'MESH':
                         continue
@@ -606,19 +614,19 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
                 links[obj.name] = None if obj.parent is None else obj.parent.name
             # добавляем коллекции
                 #for i in range(4, 7):
-                coll_name = model().morph_collection[mc+4]
+                coll_name = MODEL().morph_collection[mc + 4]
                 if coll_name not in scene.collection.children:
                     new_col = bpy.data.collections.new(coll_name)
                     scene.collection.children.link(new_col)
 
                 coll = scene.collection.children[coll_name]
-                morph_name = model().morph_comp[mc+4]
+                morph_name = MODEL().morph_comp[mc + 4]
                 #if morph_name in coll.objects:
                 #    continue
             # копируем меши
                     #detect suitable obj
                 new_obj = obj.copy()
-                new_obj.name = model().morph_comp[mc+4] + get_true_name(obj.name)
+                new_obj.name = MODEL().morph_comp[mc + 4] + get_true_name(obj.name)
                 new_obj.data = obj.data.copy()
                 new_obj.data.name = new_obj.name
                 coll.objects.link(new_obj)
@@ -629,7 +637,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
                 for child, parent in links.items():
                     if parent is None:
                         continue
-                    bpy.data.objects[model().morph_comp[mc+4] + get_true_name(child)].parent = bpy.data.objects[model().morph_comp[mc+4] + get_true_name(parent)]
+                    bpy.data.objects[MODEL().morph_comp[mc + 4] + get_true_name(child)].parent = bpy.data.objects[MODEL().morph_comp[mc + 4] + get_true_name(parent)]
             for obj in bpy.context.selected_objects:
                 obj.select_set(False)
             #Трогаем только scaled коллекции
@@ -638,7 +646,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
                 for child, parent in links.items():
                     if parent is None:
                         #continue
-                        bpy.data.objects[model().morph_comp[mc+4] + get_true_name(child)].scale = (scaled, scaled, scaled)
+                        bpy.data.objects[MODEL().morph_comp[mc + 4] + get_true_name(child)].scale = (scaled, scaled, scaled)
                             
                             
             for obj in bpy.context.selected_objects:
@@ -686,7 +694,6 @@ class CChooseResFile(bpy.types.Operator, ImportHelper):
     )
 
     def execute(self, context):
-        importlib.reload(scene_utils)
         scene_utils.set_res_file_buffer(self.res_file_index, self.filepath)
         return {'FINISHED'}
 
@@ -701,10 +708,7 @@ class CClear_OP_operator(bpy.types.Operator):
     bl_description = 'Should be pretty obvious'
 
     def execute(self, context: bpy.types.Context) -> set[str]:
-
-        importlib.reload(scene_utils)
-
-        bpy.context.window_manager.progress_begin(0, 100)
+        bpy.context.window_manager.progress_begin(0, 99)
         _, duration = get_duration(lambda : scene_utils.scene_clear())
         bpy.context.window_manager.progress_end()
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
@@ -736,10 +740,7 @@ class CImport_OP_operator(bpy.types.Operator):
             return {'CANCELLED'}
 
         res_file = ResFile(res_path)
-        importlib.reload(scene_utils)
-        importlib.reload(figure)
-        from . import utils as fig_utils
-        importlib.reload(fig_utils)
+        reload_modules()
 
         mesh_mask = self.mesh_mask
         mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
@@ -785,10 +786,7 @@ class CExport_OP_operator(bpy.types.Operator):
             self.report({'ERROR'}, 'res file empty')
             return {'CANCELLED'}
 
-        importlib.reload(scene_utils)
-        importlib.reload(figure)
-        from . import utils as fig_utils
-        importlib.reload(fig_utils)
+        reload_modules()
 
         model_name: bpy.props.StringProperty = bpy.context.scene.figmodel_name
         if not model_name:
@@ -969,7 +967,7 @@ class CAnimation_OP_shapekey(bpy.types.Operator):
     def execute(self, context):
         self.report({'INFO'}, 'Executing shapekey')
 
-        importlib.reload(scene_utils)
+        reload_modules()
         scene_utils.animation_to_shapekey(context)
 
         self.report({'INFO'}, 'Done')
@@ -992,7 +990,7 @@ class CAnimation_OP_BakeTransform(bpy.types.Operator):
             self.report({'ERROR'}, 'No object selected')
             return {"CANCELLED"}
 
-        importlib.reload(scene_utils)
+        reload_modules()
         _, duration = get_duration(lambda : scene_utils.bake_transform_animation(context))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')

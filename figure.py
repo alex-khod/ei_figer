@@ -87,7 +87,7 @@ class CFigure(object):
         print(self.name + ' have morph_count is ' + str(self.morph_count))
 
         for i in range(9):
-            self.header[i] = parser.read('i')
+            self.header[i] = parser.read('L')
 #            print('self.header[i] is ' + str(self.header[i]))
         # Center
         for _ in range(self.morph_count):
@@ -105,6 +105,7 @@ class CFigure(object):
             self.radius.append(parser.read('f'))
 #        print('self.radius is ' + str(self.radius))
         # VERTICES
+        print(self.header)
         n_vertex_blocks = self.header[0]
         # block is XXXX * morph_count, YYYY * morph_count, ZZZZ * morph_count
         # 3 coords (XYZ) * morph_count * 4 coords (XXXX)
@@ -119,31 +120,28 @@ class CFigure(object):
         # NORMALS
         n_normal4_blocks = self.header[1]
         n_normals = n_normal4_blocks * 4
+        # useless for mesh creation, but may need to be validated
         normal_data = parser.read('%uf' % (n_normals * 4))
         self.normals = np.array(normal_data).reshape(n_normals, 4)
         # TEXTURE COORDS
         n_texcoords = self.header[2]
         texcoords_data = parser.read('%uf' % (n_texcoords * 2))
         texcoords = np.array(texcoords_data).reshape(n_texcoords, 2)
-        convert_count, uv_base = fig_utils.get_uv_params(self.name)
         # unpack
+        convert_count, uv_base = fig_utils.get_uv_params(self.name)
         packed_uvs = fig_utils.unpack_uv_np(texcoords, convert_count, uv_base)
         self.t_coords = packed_uvs
-        # convert_count, uv_base = fig_utils.get_uv_params(self.name)
-        # packed_uvs = fig_utils.unpack_uv_np(texcoords, convert_count, uv_base)
-        # fig_utils.unpack_uv(texcoords, convert_count, uv_base)
-        # self.t_coords = packed_uvs
         # INDICES
         n_indicies = self.header[3]
-        self.indicies = np.array(parser.read('%uh' % n_indicies))
+        self.indicies = np.array(parser.read('%uH' % n_indicies))
         # VERTEX COMPONENTS
         n_components = self.header[4]
-        vertex_components = np.array(parser.read('%uh' % (n_components * 3))).reshape((n_components, 3))
-        # drop first component
-        self.v_c = vertex_components[:, 1:]
+        self.v_c = np.array(parser.read('%uH' % (n_components * 3))).reshape((n_components, 3))
         # MORPHING COMPONENTS
+        # useless for mesh creation, but may need to be validated
         n_morphs = self.header[5]
-        self.m_c = np.array(parser.read('%uh' % (n_morphs * 2))).reshape((n_morphs, 2))
+        # parser.read('%uH' % (n_morphs * 2))
+        self.m_c = np.array(parser.read('%uH' % (n_morphs * 2))).reshape((n_morphs, 2))
         if parser.is_EOF():
             print('EOF reached')
             return 0
@@ -165,7 +163,7 @@ class CFigure(object):
         raw_data = pack('4s', b'FIG8')
         # header
         assert(len(self.header) == 9)
-        raw_data += pack('9i', *self.header)
+        raw_data += pack('9L', *self.header)
         # center
         for v_c in self.center:
             raw_data += pack('%sf' % len(v_c), *v_c)
@@ -183,22 +181,29 @@ class CFigure(object):
         # [xyz xyz xyz xyz] * n_vertices4 * n_morph_count
         verts = np.concatenate(self.verts)
         # [XXXX * morph_count, YYYY * morph_count, ZZZZ * morph_count] * n_vertices4
+        assert verts.dtype == np.float32
         vertex_data = verts.reshape(self.morph_count, n_vertex_blocks, 4, 3).transpose(1, 3, 0, 2).tobytes()
         raw_data += vertex_data
         # normals
         n_normal4_blocks = self.header[1]
+        assert self.normals.dtype == np.float32
         raw_data += self.normals.reshape(n_normal4_blocks, 4, 4).transpose(0, 2, 1).tobytes()
-        assert self.t_coords.dtype == 'f'
-        uvs_chunk = self.t_coords.tobytes()
-        raw_data += uvs_chunk
+        assert self.t_coords.dtype == np.float32
+        raw_data += self.t_coords.tobytes()
         # indicies
-        raw_data += pack('%uh' % len(self.indicies), *self.indicies)
+        assert self.indicies.dtype == np.uint16
+        raw_data += self.indicies.tobytes()
+        # raw_data += pack('%uh' % len(self.indicies), *self.indicies)
         # vertex components
-        # TODO: save real data instead copy of 0 element
-        vertex_components = [co for v_c in self.v_c for co in [v_c[0], v_c[0], v_c[1]]]
-        raw_data += pack('%uh' % len(vertex_components), *vertex_components)
-        morph_components = [co for m_c in self.m_c for co in m_c]
-        raw_data += pack('%sh' % len(morph_components), *morph_components)
+        assert self.v_c.dtype == np.uint16
+        raw_data += self.v_c.tobytes()
+        # raw_data += pack('%uh' % len(vertex_components), *vertex_components)
+        # self.m_c = np.array([], dtype=np.uint16)
+
+        assert self.m_c.dtype == np.uint16
+        raw_data += self.m_c.tobytes()
+        # morph_components = [co for m_c in self.m_c for co in m_c]
+        # raw_data += pack('%sh' % len(morph_components), *morph_components)
         return raw_data
     
     def fillVertices(self):
@@ -214,6 +219,5 @@ class CFigure(object):
 
 
     def generate_m_c(self):
-        self.m_c = []
-        for i in range(self.header[5]):
-            self.m_c.append(tuple([i, i]))
+        n_morph_components = self.header[5]
+        self.m_c = np.repeat(np.arange(n_morph_components, dtype=np.uint16), 2).reshape(n_morph_components, 2)

@@ -145,7 +145,10 @@ def register_props():
     scene.mesh_mask = bpy.props.StringProperty(
         name='Mesh mask',
         default="",
-        description="Comma-separated include list of meshes (include all meshes if empty)"
+        description="Partial import/export of a model. Needs full base collection to be present in a scene.\n"
+                    "Fill as comma-separated include list of meshes (include all meshes if empty).\n"
+                    "Example: `head, body`\n"
+                    "NOTE: More handily, use object RMB context menu in outliner (base collection only!)"
     )
 
     scene.mesh_str = bpy.props.FloatProperty(
@@ -238,8 +241,13 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
     )
     scene.is_animation_to_new_collection = bpy.props.BoolProperty(
         name='Import/export as new collection',
-        description='If checked, duplicate base collection as new animation container on import\n',
+        description='Unchecked: import into base collection, checked: import into copy of base collection',
         default=False
+    )
+    scene.is_export_unique = bpy.props.BoolProperty(
+        name='Export unique vertices/components',
+        description='If checked, packs model more tightly, reducing mesh size by ~30%',
+        default=True
     )
     scene.model = CModel()
 

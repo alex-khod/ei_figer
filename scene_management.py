@@ -1,4 +1,5 @@
 # Copyright (c) 2022 konstvest
+import bpy
 
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -67,6 +68,17 @@ class CModel():
             # ,8: 'T~' #test unit
         }
 
+        self.morph_prefixes = [
+            '',
+            's~',
+            'd~',
+            'u~',
+            'b~',
+            'p~',
+            'g~',
+            'c~',
+        ]
+
         self.morph_collection = [
             'base',             #0
             'str',              #1
@@ -81,7 +93,7 @@ class CModel():
 
         self.mesh_list: list[CFigure] = list()
         self.pos_list : list[CBone] = list()
-        
+
     def reset(self, type : str ='all'):
         if type == 'fig' or type == 'all':
             self.mesh_list: list[CFigure] = list()
