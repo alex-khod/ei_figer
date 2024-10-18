@@ -215,15 +215,15 @@ def create_model_meshes(links: CLink, include_meshes=None):
     active_model: CModel = bpy.types.Scene.model
 
     bpy.context.window_manager.progress_update(15)
-    scene_clear()
-    bpy.context.window_manager.progress_update(49)
+    clear_morph_collections()
+    bpy.context.window_manager.progress_update(30)
     container = CItemGroupContainer()
     item_group = container.get_item_group(active_model.name)
     ensure_morph_collections()
 
     len_meshes = len(active_model.mesh_list)
     for i, fig in enumerate(active_model.mesh_list):
-        bpy.context.window_manager.progress_update(49 + int(i / len_meshes * 50))
+        bpy.context.window_manager.progress_update(30 + int(i / len_meshes * 50))
         create_mesh_2(fig, item_group)
     create_links_2(links, item_group.morph_component_count)
     for bone in active_model.pos_list:
@@ -961,29 +961,56 @@ def clear_unlinked_data():
         if col.users == 0:
             bpy.data.collections.remove(col)
 
+class TemporaryContext:
+
+    def __init__(self, temp_ui):
+        self.temp_ui = temp_ui
+        self.prev_ui = None
+
+    def __enter__(self):
+        self.prev_ui = bpy.context.area.ui_type
+        bpy.context.area.ui_type = self.temp_ui
+
+    def __exit__(self, exc_type, exc_value, tb):
+        if exc_type is not None:
+            import traceback
+            traceback.print_exception(exc_type, exc_value, tb)
+        bpy.context.area.ui_type = self.prev_ui
+
+def unhide_collections_recursive(base_collection: bpy.types.LayerCollection=None):
+    if base_collection is None:
+        view_layer: bpy.types.ViewLayer = bpy.context.view_layer
+        base_collection = view_layer.layer_collection
+
+    for collection in base_collection.children:
+        collection.hide_viewport = False
+        if collection.children:
+            unhide_collections_recursive(collection)
+
+def unhide_objects(base_collection=None):
+    for collection in bpy.context.scene.collection.children:
+        collection: bpy.types.Collection
+
+        for obj in collection.all_objects:
+            obj.hide_set(False)
+            obj.select_set(True)
+
+def clear_morph_collections():
+    for collection_name in model().morph_collection:
+        collection = bpy.data.collections.get(collection_name)
+        if collection:
+            bpy.data.collections.remove(collection)
+    bpy.ops.outliner.orphans_purge(do_recursive=True)
+
 def scene_clear():
     '''
     deletes objects, meshes and collections from scene
     '''
 
-    # scene = bpy.context.scene
-    # bpy.data.scenes.new("Scene")
-    # bpy.data.scenes.remove(scene, do_unlink=True)
-    # scene.name = "Scene"
-    # return
+    for collection in bpy.data.collections:
+        bpy.data.collections.remove(collection)
+    bpy.ops.outliner.orphans_purge(do_recursive=True)
 
-    # for collection in bpy.context.scene.collection.children:
-    #     collection.hide_viewport = False
-    #     for obj in collection.objects:
-    #         obj.hide_set(False)
-    #         obj.select_set(True)
-    # bpy.ops.object.delete()
-
-    # prev_ui = bpy.context.area.ui_type
-    # area_type = 'OUTLINER'
-    # bpy.context.area.ui_type = area_type
-    # bpy.ops.outliner.delete(hierarchy=False)
-    # bpy.context.area.ui_type = prev_ui
     for collection in bpy.context.scene.collection.children:
         for obj in collection.objects:
             bpy.data.objects.remove(obj, do_unlink=True)
