@@ -806,10 +806,18 @@ class CExport_OP_operator(bpy.types.Operator):
         mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
         func = lambda: scene_utils.export_model(context, res_path, model_name, mesh_mask_set)
         bpy.context.window_manager.progress_begin(0, 99)
-        _, duration = get_duration(func)
+        res, duration = get_duration(func)
+
+        warn = ''
+        if res:
+            warn = "WARNING: meshes skipped! Check console"
+            import pprint
+            without_morphs = pprint.pformat(res)
+            self.report({'WARNING'}, f'Meshes {without_morphs} are without morphs - export skipped')
         bpy.context.window_manager.progress_end()
 
-        self.report({'INFO'}, f'Done in {duration:.2f} sec')
+        report_style = "WARNING" if warn else "INFO"
+        self.report({report_style}, f'Done in {duration:.2f} sec. {warn}')
         return {'FINISHED'}
 
 class CAnimation_OP_import(bpy.types.Operator):

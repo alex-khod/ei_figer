@@ -75,9 +75,9 @@ def add_context_menu(self, operator_class):
 import importlib
 
 def reload_modules():
+    importlib.reload(properties)
     importlib.reload(UI_panel)
     importlib.reload(operators)
-    importlib.reload(properties)
 
     importlib.reload(scene_utils)
     importlib.reload(scene_management)

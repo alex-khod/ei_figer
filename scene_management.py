@@ -53,6 +53,30 @@ class CAnimations():
 
 
 class CModel():
+
+    morph_names = [
+        'base',  # 0
+        'str',  # 1
+        'dex',  # 2
+        'unique',  # 3
+        'base(scaled)',  # 4
+        'str(scaled)',  # 5
+        'dex(scaled)',  # 6
+        'unique(scaled)',  # 7
+        # 'testUnit'          #8
+    ]
+
+    morph_prefixes = [
+        '',
+        's~',
+        'd~',
+        'u~',
+        'b~',
+        'p~',
+        'g~',
+        'c~',
+    ]
+
     def __init__(self):
         self.reset()
         self.name = ''
@@ -67,17 +91,6 @@ class CModel():
             ,7: 'c~' #common (scaled unique)
             # ,8: 'T~' #test unit
         }
-
-        self.morph_prefixes = [
-            '',
-            's~',
-            'd~',
-            'u~',
-            'b~',
-            'p~',
-            'g~',
-            'c~',
-        ]
 
         self.morph_collection = [
             'base',             #0

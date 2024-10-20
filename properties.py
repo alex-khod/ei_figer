@@ -249,6 +249,11 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
         description='If checked, packs model more tightly, reducing mesh size by ~30%',
         default=True
     )
+    scene.is_ignore_without_morphs = bpy.props.BoolProperty(
+        name='ignore without morphs',
+        description='If checked, skips export of meshes with some missing morphs',
+        default=True
+    )
     scene.model = CModel()
 
 def unregister_props():

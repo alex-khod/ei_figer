@@ -43,6 +43,7 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
         row.prop(context.scene, 'auto_fix')
         row.prop(context.scene, 'ether')
         row.prop(context.scene, 'is_export_unique', text="compact")
+        layout.prop(context.scene, 'is_ignore_without_morphs')
         op_name = operators.CExport_OP_operator.get_name(mesh_mask)
         layout.operator('object.model_export', text=op_name).mesh_mask = mesh_mask
         row = layout.row()
@@ -153,9 +154,6 @@ class OPERATORMASS_PT_PANEL(bpy.types.Panel):
         row.operator('object.automorphnew', text=op_name).mesh_mask = mesh_mask
         row = layout.split()
         row.operator('object.fixpos', text='Fix positions')
-       #automorph (in progress now)
-        # row = layout.row()
-        # row.operator('object.automorph', text="Auto Morph")
 
 
 class ANIMATION_PT_PANEL(bpy.types.Panel):

@@ -257,6 +257,19 @@ def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
         return None
     return True
 
+def get_morph_collections(start_index=1):
+    collections = [get_collection(collection_name) for collection_name in CModel.morph_names[start_index:]]
+    return collections
+
+def get_base_members_without_morphs():
+    without_morphs = py_collections.defaultdict(list)
+    for base_obj in get_collection("base").objects:
+        for collection, prefix in zip(get_morph_collections(1), CModel.morph_prefixes[1:]):
+            morph_member_name = prefix + base_obj.name
+            if morph_member_name not in collection.objects:
+                without_morphs[base_obj.name].append(morph_member_name)
+    return without_morphs
+
 @profile
 def export_model(context, res_path, model_name, include_meshes=None):
     links = collect_links()
@@ -265,9 +278,26 @@ def export_model(context, res_path, model_name, include_meshes=None):
     active_model.reset()
     active_model.name = model_name
 
-    collect_pos(model_name, include_meshes)
+    def filter_export(include_meshes=None, exclude_meshes=None):
+        def filter_(obj):
+            if obj.type != "MESH":
+                return False
+            if include_meshes and obj.name not in include_meshes:
+                return False
+            if exclude_meshes and obj.name in exclude_meshes:
+                return False
+            return True
+        return filter_
+
+    base_collection = get_collection("base")
+    without_morphs = get_base_members_without_morphs()
+    bases_without_morphs = set(without_morphs.keys())
+    filter_ = filter_export(include_meshes, exclude_meshes=bases_without_morphs)
+    export_objects = list(filter(filter_, base_collection.objects))
+
+    collect_pos(export_objects, model_name)
     is_export_unique = context.scene.is_export_unique
-    ModelExporter.collect_mesh(include_meshes, is_export_unique)
+    ModelExporter.collect_mesh(export_objects, is_export_unique)
 
     # backup_path = res_path + ".backup"
     # with open(res_path, "wb") as dst:
@@ -335,6 +365,7 @@ def export_model(context, res_path, model_name, include_meshes=None):
                 file.write(bone_res.getvalue())
 
         print('resfile ' + res_path + ' saved')
+    return without_morphs
 
 
 def ei2abs_rotations(links: CLink, animations: CAnimations):
@@ -711,7 +742,8 @@ def is_model_correct(model_name):
     for morph_name, prefix in zip(MODEL().morph_collection[1:], MODEL().morph_prefixes[1:]):
         morph_collection = get_collection(morph_name)
         bad_objects.extend(check_morph_items(base_collection, morph_collection, prefix))
-    if bad_objects:
+
+    if bad_objects and not bpy.context.scene.is_ignore_without_morphs:
         return False
 
     bEtherlord = bpy.context.scene.ether
@@ -731,11 +763,11 @@ def is_model_correct(model_name):
             print('mesh ' + mesh.name + ' has no active uv layer (UV map)')
             return False
 
-        for i in range(obj_count):
-            morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
-            if (MODEL().morph_comp[i] + obj.name) not in morph_coll.objects:
-                print('cannot find object: ' + MODEL().morph_comp[i] + obj.name)
-                return False
+        # for i in range(obj_count):
+        #     morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
+        #     if (MODEL().morph_comp[i] + obj.name) not in morph_coll.objects:
+        #         print('cannot find object: ' + MODEL().morph_comp[i] + obj.name)
+        #         return False
 
     if len(root_list) != 1:
         print('incorrect root objects, must be only one, exist: ' + str(root_list))
@@ -790,16 +822,10 @@ def collect_links(collection_name="base"):
     lnk.links = lnk_ordered
     return lnk
 
-def collect_pos(model_name, include_meshes=None):
+def collect_pos(objects, model_name):
     err = 0
     obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
-    base_coll = get_collection()
-    #MODEL().pos_list.clear()
-    for obj in base_coll.objects:
-        if obj.type != 'MESH':
-            continue
-        if include_meshes and obj.name not in include_meshes:
-            continue
+    for obj in objects:
         bone = CBone()
         for i in range(obj_count):
             morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
@@ -876,23 +902,16 @@ class ModelExporter:
         return padded
 
     @staticmethod
-    def collect_mesh(include_meshes=None, collect_unique=False):
+    def collect_mesh(objects, collect_unique=False):
         # collect object meshes into CFigure
         MODEL().mesh_list = []
         model_group = CItemGroupContainer().get_item_group(MODEL().name)
         obj_count = model_group.morph_component_count
-        base_coll = get_collection()
-
         individual_group = ['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left',
                             'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
 
-        len_objects = len(base_coll.objects)
-        for n_obj, obj in enumerate(base_coll.objects):
-            if obj.type != 'MESH':
-                continue
-            if include_meshes and obj.name not in include_meshes:
-                continue
-
+        len_objects = len(objects)
+        for n_obj, obj in enumerate(objects):
             figure = CFigure()
             mesh_group = CItemGroupContainer().get_item_group(obj.name)
             export_group = mesh_group if mesh_group.type in individual_group else model_group
