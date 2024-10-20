@@ -16,7 +16,7 @@
 bl_info = {
     'name': 'EI figer',
     'author': 'Konstvest/LostSoul/Asbestos',
-    'version': (5, 8),
+    'version': (5, 9),
     'blender': (3, 1, 0),
     'location': '',
     'description': 'Addon for import/export models and animations from Evil Islands game to Blender',
