@@ -13,6 +13,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import bpy
+
+from . import scene_utils
 from . import operators
 
 class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
@@ -171,19 +173,23 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         #layout.label(text='Animations')
         layout.prop(context.scene, 'animation_name')
 
-        # layout.prop(context.scene, 'is_animation_to_new_collection')
-
+        layout.prop(context.scene, 'animsubfix')
+        layout.prop(context.scene, 'is_animation_to_new_collection')
         use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
         label = operators.CAnimation_OP_import.bl_label % use_collection
         layout.operator('object.animation_import', text=label).target_collection = use_collection
+        layout.prop(context.scene, 'is_use_mesh_frame_range')
         label = operators.CAnimation_OP_Export.bl_label % use_collection
         layout.operator('object.animation_export', text=label).target_collection = use_collection
-        layout.prop(context.scene, 'animsubfix')
+
+        donor, acceptor = scene_utils.get_donor_acceptor(context)
+        layout.label(text=f"FROM: {donor.name if donor else None }")
+        layout.label(text=f"DEST: {acceptor.name if acceptor else None }")
         layout.operator('object.animation_shapekey', text='Shapekey')
-        layout.prop(context.scene, 'skeletal')
+        # layout.prop(context.scene, 'skeletal')
         layout.operator('object.animation_bake_transform', text='Bake transform')
-        layout.separator()
-        layout.operator('object.debug_test')
+        # layout.separator()
+        # layout.operator('object.debug_test')
 
 
 def outliner_mt_collection(self : bpy.types.OUTLINER_MT_collection, context):

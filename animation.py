@@ -14,6 +14,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 import bpy
+import numpy as np
 from struct import pack, unpack
 from mathutils import Quaternion
 from . utils import read_xyzw, write_xyzw, read_xyz, write_xyz, CByteReader
@@ -43,45 +44,33 @@ class CAnimation(object):
         parser = CByteReader(raw_data)
 
         #rotations
-        rot_count = parser.read('i')
+        rot_count = parser.read('L')
         for _ in range(rot_count):
             self.rotations.append(Quaternion(parser.read('ffff')))
         
         #translations
-        trans_count = parser.read('i')
+        trans_count = parser.read('L')
         for _ in range(trans_count):
             self.translations.append(parser.read('fff')) #ddd для ether2
         
         bEtherlord = bpy.context.scene.ether
         if bEtherlord:
         #scalings?
-            something_frame_count = parser.read('i')
+            something_frame_count = parser.read('L')
             #print('name = ' + name)
             #print('something_frame_count = ' + str(something_frame_count))           
             for _ in range(something_frame_count):
                 something = self.something.append(parser.read('fff'))
                 #print('something = ' + str(something))
-            
+
+        morph_frame_count = parser.read('L')
+        morph_vert_count = parser.read('L')
         if parser.is_EOF():
             #print('EOF reached')
             return 0
-        #morphations
-        morhp_frame_count = parser.read('i')
-#        print('morhp_frame_count = ' + str(morhp_frame_count))
-        if parser.is_EOF():
-            #print('EOF reached')
-            return 0
-        morhp_vert_count = parser.read('i')
-#        print('resul_vert_count = ' + str(morhp_vert_count))
-#        print('------------------- ')
-        
-        for _ in range(morhp_frame_count):
-            morph = list()
-            for _ in range(morhp_vert_count):
-                #print('trans_count = ' + str(trans_count))
-                morph.append(parser.read('fff')) #оригинал. 
-                #morph.append(parser.read('fff')) 
-            self.morphations.append(morph)
+
+        morphanim_data = parser.read('%df' % (morph_frame_count * morph_vert_count * 3))
+        self.morphations = np.array(morphanim_data).reshape((morph_frame_count, morph_vert_count, 3))
         if parser.is_EOF():
             #print('EOF reached')
             return 0
@@ -89,74 +78,21 @@ class CAnimation(object):
 
     def write_anm(self):
         raw_data = b''
-        raw_data += pack('i', len(self.rotations))
+        raw_data += pack('L', len(self.rotations))
         for rot in self.rotations:
-            raw_data += pack('%sf' % len(rot), *rot)
+            raw_data += pack('%uf' % len(rot), *rot)
         #translations
-        raw_data += pack('i', len(self.translations))
+        raw_data += pack('L', len(self.translations))
         for trans in self.translations:
-            raw_data += pack('%sf' % len(trans), *trans)
-        #morphations
-        raw_data += pack('i', len(self.morphations))
-        #raw_data += pack('i', 0)
-        if len(self.morphations) > 0:
-            raw_data += pack('i', len(self.morphations[0]))
-        else:
-            raw_data += pack('i', 0)
-            
+            raw_data += pack('%uf' % len(trans), *trans)
+        # morphations
+        # n_frames
+        raw_data += pack('L', len(self.morphations))
+        n_vertices_per_frame = len(self.morphations[0]) if len(self.morphations) else 0
+        raw_data += pack('L', n_vertices_per_frame)
+
         for frame in self.morphations:
-            for vec in frame:
-                raw_data += pack('%sf' % len(vec), *vec)
+            assert(len(frame) == n_vertices_per_frame)
+            raw_data += frame.tobytes()
+
         return raw_data
-
-    def import_anm(self, path):
-        """
-        Reads animations file
-        """
-        self.name = os.path.basename(path)
-        with open(path, 'rb') as anm_file:
-            #rotations
-            rot_count = unpack('i', anm_file.read(4))[0]
-            for _ in range(rot_count):
-                self.rotations.append(read_xyzw(anm_file))
-            #translations
-            trans_count = unpack('i', anm_file.read(4))[0]
-            for _ in range(trans_count):
-                self.translations.append(read_xyz(anm_file))
-            #morphations
-            morhp_frame_count = unpack('i', anm_file.read(4))[0]
-            if morhp_frame_count == 0 and anm_file.read(1) == b'':
-                #print('EOF reached')
-                return 0
-            morph_vert_count = unpack('i', anm_file.read(4))[0]
-            for _ in range(morhp_frame_count):
-                morph = list()
-                for _ in range(morph_vert_count):
-                    morph.append(read_xyz(anm_file))
-                self.morphations.append(morph)
-        return 0
-
-    def export_anm(self, path):
-        """
-        Writes animation data to file
-        """
-        with open(path, 'wb') as anm_file:
-            #rotations
-            anm_file.write(pack('i', len(self.rotations)))
-            for rot in self.rotations:
-                write_xyzw(anm_file, rot)
-            #translations
-            anm_file.write(pack('i', len(self.translations)))
-            for trans in self.translations:
-                write_xyz(anm_file, trans)
-            #morphations
-            anm_file.write(pack('i', len(self.morphations)))
-            if len(self.morphations) > 0:
-                anm_file.write(pack('i', len(self.morphations[0])))
-            else:
-                anm_file.write(pack('i', 0))
-            for frame in self.morphations:
-                for vec in frame:
-                    write_xyz(anm_file, vec)
-
-        return 0

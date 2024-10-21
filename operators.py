@@ -22,6 +22,7 @@ from . import scene_utils
 from . import figure
 from . import utils as fig_utils
 from . import scene_management
+from . import animation
 from . figure import CFigure
 from . bone import CBone
 from . links import CLink
@@ -48,6 +49,7 @@ def reload_modules():
     importlib.reload(figure)
     importlib.reload(fig_utils)
     importlib.reload(scene_management)
+    importlib.reload(animation)
 
 class CRefreshTestTable(bpy.types.Operator):
     bl_label = 'EI refresh test unit'
@@ -855,6 +857,10 @@ class CAnimation_OP_import(bpy.types.Operator):
             self.report({'ERROR'}, 'Animation name is empty')
             return {'CANCELLED'}
 
+        if not scene_utils.get_collection("base"):
+            self.report({'ERROR'}, 'No base collection exists')
+            return {'CANCELLED'}
+
         # choosing model to load
         if model_name + '.anm' not in resFile.get_filename_list():
             self.report({'ERROR'}, 'Animations set for ' + model_name + 'not found')
@@ -869,15 +875,26 @@ class CAnimation_OP_import(bpy.types.Operator):
                 return {'CANCELLED'}
 
         # fix names for base collection being imported
-        scene_utils.rename_drop_postfix(scene_utils.get_collection("base").objects)
+        animation_destination_name = self.target_collection
+        self.report({'INFO'}, f'Importing into "{animation_destination_name}" collection')
+
+        if animation_destination_name != "base":
+            scene_utils.copy_collection("base", animation_destination_name)
+            self.report({'INFO'}, f'Copying "base" collection as "{animation_destination_name}"')
+
+        reload_modules()
+        self.report({'INFO'}, f'Renaming .001-like names for "{animation_destination_name}"')
+        scene_utils.rename_drop_postfix(scene_utils.get_collection(animation_destination_name).objects)
         animations = scene_utils.read_animations(resFile, model_name, anm_name)
-        links = scene_utils.collect_links()  # Lost Soul - fix for rewrite animations after close file
+        links = scene_utils.collect_links(animation_destination_name)
         scene_utils.ei2abs_rotations(links, animations)
+
         bAutofix = bpy.context.scene.animsubfix
         if not bAutofix:
             scene_utils.abs2Blender_rotations(links, animations)
 
-        scene_utils.insert_animation(self.target_collection, animations)
+        scene_utils.insert_animation(animation_destination_name, animations)
+        context.scene.frame_set(0)
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}
 
@@ -897,6 +914,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation export')
+
         res_path = bpy.context.scene.res_file
         if not res_path or not os.path.exists(res_path):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
@@ -914,69 +932,37 @@ class CAnimation_OP_Export(bpy.types.Operator):
             self.report({'ERROR'}, 'Animation name is empty')
             return {'CANCELLED'}
 
+        reload_modules()
         # fix names for collection being exported
-        export_from_name = self.target_collection
-        scene_utils.rename_drop_postfix(scene_utils.get_collection(export_from_name).objects)
+        animation_source_name = self.target_collection
+        self.report({'INFO'}, f'Exporting from "{animation_source_name}" collection')
+        self.report({'INFO'}, f'Renaming .001-like names for "{animation_source_name}"')
+        scene_utils.rename_drop_postfix(scene_utils.get_collection(animation_source_name).objects)
 
-        context.scene.frame_start, context.scene.frame_end = scene_utils.get_collection_frame_range(export_from_name)
+        if context.scene.is_use_mesh_frame_range:
+            frame_range = context.scene.frame_start, context.scene.frame_end
+        else:
+            frame_range = scene_utils.get_collection_frame_range(animation_source_name)
 
-        links = scene_utils.collect_links(export_from_name)
-        animations = scene_utils.collect_animations(export_from_name)
-        scene_utils.blender2abs_rotations(links, animations)
-        scene_utils.abs2ei_rotations(links, animations)
+        self.report({'INFO'}, f'Exporting frames from {frame_range[0]} to {frame_range[1]}')
+        _, duration = get_duration(lambda : scene_utils.export_animation(context, frame_range, animation_source_name,
+                                                                           res_path))
 
-        def write_animations(res_path, model_name, anm_name):
-            #pack crrent animation first. byte array for each part (lh1, lh2, etc)
-            anm_res = io.BytesIO()
-            with ResFile(anm_res, 'w') as res:
-                for part in animations:
-                    with res.open(part.name, 'w') as file:
-                        data = part.write_anm()
-                        file.write(data)
-
-            # read all animation data(uattack, udeath and etc) from figures
-            export_model_name = model_name + '.anm'
-            data = {}
-            with (
-                ResFile(res_path, "r") as figres,
-                figres.open(export_model_name, "r") as anmfile,
-                ResFile(anmfile, "r") as res
-                ):
-                for info in res.iter_files():
-                    with res.open(info.name) as file:
-                        data[info.name] = file.read()
-            
-            data[anm_name] = anm_res.getvalue() #modified animation set
-
-            #write animations into res file
-            with (
-                ResFile(res_path, "a") as figres,
-                figres.open(export_model_name, "w") as anmfile,
-                ResFile(anmfile, "w") as res
-                ):
-                for name, anm_data in data.items():
-                    with res.open(name, "w") as file:
-                        file.write(anm_data)
-
-            print(res_path + 'saved')
-
-        write_animations(res_path, model_name, anm_name)
-
-        self.report({'INFO'}, 'Done')
+        self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
 
 class CAnimation_OP_shapekey(bpy.types.Operator):
     bl_label = 'Shapekey animation Operator'
     bl_idname = 'object.animation_shapekey'
-    bl_description = "Select two models, first Donor then Acceptor.\n" \
-                     "Donor's vertex animation will be transferred as shapekeys to\n" \
-                     "Acceptor."
+    bl_description = "Select two models, FROM and DEST (the square-highlighted\n" \
+                     "object's icon will be DEST).\n" \
+                     "FROM's vertex animation will be transferred as shapekeys to DEST"
 
     def execute(self, context):
-        self.report({'INFO'}, 'Executing shapekey')
-
         reload_modules()
-        scene_utils.animation_to_shapekey(context)
+        donor, acceptor = scene_utils.get_donor_acceptor(context)
+        self.report({'INFO'}, f'Executing animation shapekeying from {donor.name} into {acceptor.name}')
+        scene_utils.animation_to_shapekey(context, donor, acceptor)
 
         self.report({'INFO'}, 'Done')
         return {'FINISHED'}

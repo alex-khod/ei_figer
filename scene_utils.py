@@ -211,7 +211,7 @@ def import_lnk_fig_bon_files(res_file, model_name, include_meshes=None):
     # read parts
     filenames = res_file.get_filename_list()
     for part in model_links.links.keys():
-        if part not in include_meshes:
+        if include_meshes and part not in include_meshes:
             continue
         if (part + '.fig') in filenames:
             read_figure(res_file, part + '.fig')
@@ -592,14 +592,7 @@ def insert_keyframe(sk, f):
     sk.value = 1.0
     sk.keyframe_insert("value", frame=f)   
 
-def insert_animation(to_collection : str, anm_list : CAnimations):
-    if not bpy.data.collections.get("base"):
-        raise Exception("No \"base\" collection exists!")
-    if not bpy.data.collections.get(to_collection) and to_collection != "base":
-        copy_collection("base", to_collection)
-
-    rename_drop_postfix(get_collection(to_collection).objects)
-
+def insert_animation(to_collection: str, anm_list : CAnimations):
     clear_animation_data(to_collection)
 
     for part in anm_list:
@@ -626,13 +619,20 @@ def insert_animation(to_collection : str, anm_list : CAnimations):
                 obj.location = part.translations[frame]
                 obj.keyframe_insert(data_path='location', index=-1)
             
-            #morphations
+        #morphations
         if len(part.morphations) > 0:
+            n_vertices = len(obj.data.vertices)
+            vertices_data = np.zeros(n_vertices * 3, np.float32)
+            obj.data.vertices.foreach_get('co', vertices_data)
+            vertices_data = vertices_data.reshape((n_vertices, 3))
+
             obj.shape_key_add(name='basis', from_mix=False)
             for frame in range(len(part.morphations)):
                 key = obj.shape_key_add(name=str(frame), from_mix=False)
-                for i in range(len(part.morphations[frame])):
-                    key.data[i].co = sumVector(obj.data.vertices[i].co, part.morphations[frame][i])
+
+                frame_data = vertices_data + part.morphations[frame]
+                n_frame_verties = len(frame_data)
+                key.data.foreach_set('co', frame_data.flatten())
                 insert_keyframe(key, frame)
     return True
 
@@ -642,7 +642,8 @@ def get_res_file_buffer(index):
 def set_res_file_buffer(index, value):
     setattr(bpy.context.scene, 'res_file_buffer%d' % index, value)
 
-def collect_animations(collection_name="base"):
+
+def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
     anm_list = []
     coll = get_collection(collection_name)
     for obj in coll.objects:
@@ -655,8 +656,11 @@ def collect_animations(collection_name="base"):
         anm = CAnimation()
         anm.name = obj.name
         obj.rotation_mode = 'QUATERNION'
-        
-        for frame in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+
+        frame_start, frame_end = frame_range
+
+        basis_block = None
+        for frame in range(frame_start, frame_end + 1):
             #rotations
             bpy.context.scene.frame_set(frame) #choose frame
             anm.rotations.append(Quaternion(obj.rotation_quaternion))
@@ -669,21 +673,28 @@ def collect_animations(collection_name="base"):
             else:
                 anm.translations.append(obj.location.copy())
 
-            #morphations
+            # morphations
             if not obj.data.shape_keys:
                 continue
 
-            if not len(anm.morphations):
-                anm.morphations = [[] for _ in range(bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1)]
+            if basis_block is None:
+                basis_block = obj.data.shape_keys.key_blocks['basis']
+                n_morph_frame_vertices = len(basis_block.data)
+                basis_data = np.zeros(n_morph_frame_vertices * 3, np.float32)
+                basis_block.data.foreach_get('co', basis_data)
+                basis_data = basis_data.reshape((n_morph_frame_vertices, 3))
 
-            #check if 'basis' morph exists
-            basis_block = obj.data.shape_keys.key_blocks['basis']
             block = obj.data.shape_keys.key_blocks[str(frame)]
             if block.value != 1.0:
                 print(f'{obj.name} incorrect morph value')
-            
-            for i in range(len(block.data)):
-                anm.morphations[frame].append(subVector(block.data[i].co, basis_block.data[i].co))
+
+            n_block_data = len(block.data)
+            frame_data = np.zeros(n_block_data * 3, dtype=np.float32)
+            block.data.foreach_get('co', frame_data)
+            frame_data = frame_data.reshape((n_morph_frame_vertices, 3))
+            frame_data = frame_data - basis_data
+            # frame_data = np.zeros((n_morph_frame_vertices, 3), np.float32)
+            anm.morphations.append(frame_data)
 
         anm_list.append(anm)
     return CAnimations(anm_list)
@@ -809,12 +820,11 @@ def parts_ordered(links : dict[str, str], links_out : dict[str, str], root):
 
 def collect_links(collection_name="base"):
     lnk = CLink()
-    base_coll = get_collection(collection_name)
+    collection = get_collection(collection_name)
 
-    for obj in base_coll.objects:
+    for obj in collection.objects:
         if obj.type != 'MESH':
             continue
-        print(obj.name)
         lnk.add(obj.name, obj.parent.name if obj.parent is not None else None)
 
     lnk_ordered : dict[str, str] = dict()
@@ -1059,12 +1069,21 @@ def clear_old_morphs(start_index=1, include_meshes=None):
     #             bpy.data.objects.remove(obj)
     # return True
 
+def clear_collection(collection_name):
+    collection = get_collection(collection_name)
+    if collection is None:
+        return
+    bpy.data.collections.remove(collection)
+    with TemporaryContext('VIEW_3D'):
+        bpy.ops.outliner.orphans_purge(do_recursive=True)
+
 def clear_morph_collections(start_index=1):
     for collection_name in MODEL().morph_collection[start_index:]:
         collection = bpy.data.collections.get(collection_name)
         if collection:
             bpy.data.collections.remove(collection)
-    bpy.ops.outliner.orphans_purge(do_recursive=True)
+    with TemporaryContext('VIEW_3D'):
+        bpy.ops.outliner.orphans_purge(do_recursive=True)
 
 def clear_unlinked_data():
     with TemporaryContext("VIEW_3D"):
@@ -1208,16 +1227,17 @@ def auto_fix_scene():
     # copy empty components
     pass
 
+
 def get_donor_acceptor(context: bpy.types.Context) -> [bpy.types.Object, bpy.types.Object]:
     active = context.active_object
-    if (active is None):
-        raise Exception("No object is active")
+    if active is None:
+        return None, None
     acceptor = active
     selected = context.selected_objects
-    donors = list(filter(lambda x: x != active, selected))
-    if (len(donors) != 1):
-        raise Exception("Exactly two objects need to be selected: first donor, then acceptor")
-    donor = donors[0]
+    acceptors = list(filter(lambda x: x != active, selected))
+    if len(acceptors) != 1:
+        return None, acceptor
+    donor = acceptors[0]
     return donor, acceptor
 
 def transform(object):
@@ -1260,77 +1280,100 @@ def transform2(object):
     object.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
     object.scale = (1.0, 1.0, 1.0)
 
-def animation_to_shapekey(context):
+
+def animation_to_shapekey(context, donor, acceptor):
+    acceptor.shape_key_clear()
+    acceptor.shape_key_add(name='basis', from_mix=False)
+    depgraph = context.evaluated_depsgraph_get()
+    n_vertex = len(donor.data.vertices)
+    # frame_data = np.zeros((n_vertex * 3), np.float32)
+    for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
+        context.scene.frame_set(frame)
+        # animate vertices
+        donor_bm = bmesh.new()
+        donor_bm.from_object(donor, depgraph)
+        donor_bm.verts.ensure_lookup_table()
+        # donor_bm.verts.foreach_get('co', frame_data)
+        frame_data = np.array([x for vertex in donor_bm.verts for x in vertex.co])
+        # copy verts from donor to acceptor
+        new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
+        new_key.data.foreach_set('co', frame_data)
+
+        #bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
+        # for i, vertex in enumerate(donor_verts):
+        #     new_key.data[i].co = vertex.co
+        #     vertex: bmesh.types.BMVert
+            # new_key.data[i].co = donor.matrix_world @ vertex.co
+
+        #bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
+        insert_keyframe(new_key, frame)
+
+
+def animation_skeletal(context):
     donor, acceptor = get_donor_acceptor(context)
     armature = donor
     acceptor.shape_key_clear()
 
-    bAutofix = bpy.context.scene.skeletal
-    if not bAutofix:
+    isSkeletal = bpy.context.scene.skeletal
+    if not isSkeletal:
         base_key = acceptor.shape_key_add(name='basis', from_mix=False)
-    # huh
-    # for i, vertex in enumerate(donor.data.vertices):
-    #     base_key.data[i].co = vertex.co
-    # for animating verts
+
     depgraph = context.evaluated_depsgraph_get()
     for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
         context.scene.frame_set(frame)
-        if not bAutofix:
+        if not isSkeletal:
             # animate vertices
             donor_bm = bmesh.new()
             donor_bm.from_object(donor, depgraph)
             donor_bm.verts.ensure_lookup_table()
-            #donor_verts = donor.data.vertices
+            # donor_verts = donor.data.vertices
             donor_verts = donor_bm.verts
 
             # copy verts from donor to acceptor
             new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
 
-            #bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
+            # bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
             for i, vertex in enumerate(donor_verts):
                 new_key.data[i].co = vertex.co
                 vertex: bmesh.types.BMVert
                 # new_key.data[i].co = donor.matrix_world @ vertex.co
-                #new_key.data[i].x = vertex.x + armature.location[0]
-                #new_key.data[i].y = vertex.y + armature.location[1]
-                #new_key.data[i].z = vertex.z + armature.location[2]
-            # print(new_key.data[0].co, donor_verts[0].co)
-                
-            #bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
-            insert_keyframe(new_key, frame)
-        
-        if bAutofix:
-            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
-            #acceptor.rotation_euler[0] = -armature.rotation_euler[1]*2-0.385398-0.16
 
-    #        acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
-    #        acceptor.rotation_euler[1] = armature.rotation_euler[0]
-    #        acceptor.rotation_euler[2] = armature.rotation_euler[2]+1.570796
+            # bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
+            insert_keyframe(new_key, frame)
+
+        if isSkeletal:
+            # acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
+            # acceptor.rotation_euler[0] = -armature.rotation_euler[1]*2-0.385398-0.16
+
+            #        acceptor.rotation_euler[0] = -armature.rotation_euler[1]-0.385398-0.16
+            #        acceptor.rotation_euler[1] = armature.rotation_euler[0]
+            #        acceptor.rotation_euler[2] = armature.rotation_euler[2]+1.570796
             acceptor.rotation_quaternion[0] = armature.rotation_quaternion[0]
             acceptor.rotation_quaternion[1] = armature.rotation_quaternion[1]
             acceptor.rotation_quaternion[2] = armature.rotation_quaternion[2]
             acceptor.rotation_quaternion[3] = armature.rotation_quaternion[3]
 
-            #acceptor.rotation_euler[2] = armature.rotation_euler[2]-1.570796-1.570796
+            # acceptor.rotation_euler[2] = armature.rotation_euler[2]-1.570796-1.570796
             acceptor.keyframe_insert(data_path='rotation_quaternion', index=-1)
 
-            #acceptor.location[0] = armature.location[0]/100+0.028571
+            # acceptor.location[0] = armature.location[0]/100+0.028571
 
-    #        acceptor.location[0] = armature.location[0]+2.8571/100
-    #        acceptor.location[1] = armature.location[1]
-    #        acceptor.location[2] = (armature.location[2]/100+ (0.08+8)/100)
+            #        acceptor.location[0] = armature.location[0]+2.8571/100
+            #        acceptor.location[1] = armature.location[1]
+            #        acceptor.location[2] = (armature.location[2]/100+ (0.08+8)/100)
             acceptor.location[0] = armature.location[0]
             acceptor.location[1] = armature.location[1]
             acceptor.location[2] = armature.location[2]
-            
+
             acceptor.keyframe_insert(data_path='location', index=-1)
-            
-            #acceptor.scale = donor.scale*100
-            #acceptor.scale = [1,1,1]
+
+            # acceptor.scale = donor.scale*100
+            # acceptor.scale = [1,1,1]
             acceptor.scale = donor.scale
-            
-            #acceptor.transform_apply(location=False, rotation=False, scale=True)
+
+            # acceptor.transform_apply(location=False, rotation=False, scale=True)
             acceptor.keyframe_insert(data_path='scale', index=-1)
+
 
 # set cursor
 # bpy.context.scene.cursor.location = (0, 0, 0)
@@ -1361,11 +1404,18 @@ def select_collection(coll_name, append_selection=False):
     for obj in coll.objects:
         obj.select_set(True)
 
-def copy_collection(copy_from_name, copy_to_name, name_prefix=None):
+def copy_collection(copy_from_name, copy_to_name, name_prefix=None, replace=True):
     from_collection = bpy.data.collections.get(copy_from_name)
     # make new collection
-    to_collection = bpy.data.collections.new(copy_to_name)
-    bpy.context.scene.collection.children.link(to_collection)
+    to_collection = get_collection(copy_to_name)
+
+    if replace and to_collection is not None:
+        clear_collection(copy_to_name)
+        to_collection = None
+
+    if to_collection is None:
+        to_collection = bpy.data.collections.new(copy_to_name)
+        bpy.context.scene.collection.children.link(to_collection)
 
     # store old-new object links
     prototypes = {}
@@ -1592,3 +1642,50 @@ def bake_transform_animation_frame(context, donor, acceptor, frame):
         new_key.data[i].co = vertex.co
     insert_keyframe(new_key, frame)
     bpy.data.objects.remove(frame_donor, do_unlink=True)
+
+@profile
+def export_animation(context, frame_range, animation_source_name, res_path):
+    animation_name = context.scene.animation_name
+    model_name = context.scene.figmodel_name
+
+    links = collect_links(animation_source_name)
+    animations = collect_animations(frame_range, animation_source_name)
+    blender2abs_rotations(links, animations)
+    abs2ei_rotations(links, animations)
+
+    write_animations(animations, res_path, model_name, animation_name)
+
+def write_animations(animations, res_path, model_name, animation_name):
+    # pack crrent animation first. byte array for each part (lh1, lh2, etc)
+    anm_res = io.BytesIO()
+    with ResFile(anm_res, 'w') as res:
+        for part in animations:
+            with res.open(part.name, 'w') as file:
+                data = part.write_anm()
+                file.write(data)
+
+    # read all animation data(uattack, udeath and etc) from figures
+    export_model_name = model_name + '.anm'
+    data = {}
+    with (
+        ResFile(res_path, "r") as figres,
+        figres.open(export_model_name, "r") as anmfile,
+        ResFile(anmfile, "r") as res
+    ):
+        for info in res.iter_files():
+            with res.open(info.name) as file:
+                data[info.name] = file.read()
+
+    data[animation_name] = anm_res.getvalue()  # modified animation set
+
+    # write animations into res file
+    with (
+        ResFile(res_path, "a") as figres,
+        figres.open(export_model_name, "w") as anmfile,
+        ResFile(anmfile, "w") as res
+    ):
+        for name, anm_data in data.items():
+            with res.open(name, "w") as file:
+                file.write(anm_data)
+
+    print(res_path + 'saved')

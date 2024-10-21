@@ -240,8 +240,9 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
         default=False
     )
     scene.is_animation_to_new_collection = bpy.props.BoolProperty(
-        name='Import/export as new collection',
-        description='Unchecked: import into base collection, checked: import into copy of base collection',
+        name='as new collection',
+        description='Unchecked: import into base collection\n'
+                    'Checked: import into copy of base collection named as animation',
         default=False
     )
     scene.is_export_unique = bpy.props.BoolProperty(
@@ -252,6 +253,13 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
     scene.is_ignore_without_morphs = bpy.props.BoolProperty(
         name='ignore without morphs',
         description='If checked, skips export of meshes with some missing morphs',
+        default=True
+    )
+    scene.is_use_mesh_frame_range = bpy.props.BoolProperty(
+        name='use mesh frame range',
+        description='For shapekey/export operations frame range (start, end)\n'
+                    'Checked: uses mesh animation frame range\n'
+                    'Unchecked: uses scene frame range',
         default=True
     )
     scene.model = CModel()
