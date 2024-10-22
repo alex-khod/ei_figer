@@ -637,7 +637,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
                     if parent is None:
                         # continue
                         bpy.data.objects[MODEL().morph_comp[mc + 4] + get_true_name(child)].scale = (
-                        scaled, scaled, scaled)
+                            scaled, scaled, scaled)
 
             for obj in bpy.context.selected_objects:
                 obj.select_set(False)
@@ -944,6 +944,19 @@ class CAnimation_OP_Export(bpy.types.Operator):
                                                                         res_path))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
+        return {'FINISHED'}
+
+class CAnimation_OP_UE4_Toolchain(bpy.types.Operator):
+    bl_label = 'UE4 to EI'
+    bl_idname = 'object.ue4_toolchain'
+    bl_description = 'Transform UE4 animated model into shapekeyed mesh\n' \
+                     'Operates on root->armature->mesh structure, with root selected.'
+
+    def execute(self, context):
+        self.report({'INFO'}, f'Executing UE4 to EI')
+        reload_modules()
+        scene_utils.ue4_toolchain(self, context)
+        self.report({'INFO'}, f'Done')
         return {'FINISHED'}
 
 

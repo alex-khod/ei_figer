@@ -19,7 +19,7 @@ import bmesh
 import copy
 import io
 from math import sqrt
-from mathutils import Quaternion, Vector, Matrix
+from mathutils import Quaternion, Vector, Matrix, Euler
 import copy as cp
 import collections as py_collections
 from typing import Set, Tuple, List
@@ -1717,3 +1717,112 @@ def write_animations(animations, res_path, model_name, animation_name):
                 file.write(anm_data)
 
     print(res_path + 'saved')
+
+
+def ue4_toolchain(operator, context):
+    def check_type(obj, type_needed):
+        if obj.type != type_needed:
+            raise Exception("Incorrect selection: need to select root of root->armature->mesh hierarchy")
+
+    root = context.active_object
+    check_type(root, "EMPTY")
+    armature = root.children[0]
+    check_type(armature, "ARMATURE")
+    mesh = armature.children[0]
+    check_type(mesh, "MESH")
+    ue4_toolchain_(operator, context, root, armature, mesh)
+
+
+def animation_euler_to_quaternions(obj: bpy.types.Object):
+    action = obj.animation_data.action
+    frames, eulers = get_euler_frames(action)
+    quaternions = [euler_to_quaternion(*euler) for euler in eulers]
+    # rebase animation from first frame
+    # bq = quaternions[0]
+    # ibq = bq.inverted()
+    # quaternions = [q * ibq for q in quaternions]
+    # bpy.ops.object.select_all(action='DESELECT')
+    # obj.select_set(True)
+    # obj.rotation_mode = 'QUATERNION'
+    # obj.rotation_quaternion = ibq
+    # bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+    ###
+    animation_from_quaternions(obj, frames, quaternions)
+
+
+def euler_to_quaternion(x, y, z):
+    euler = Euler((x, y, z), 'XYZ')
+    quaternion = euler.to_quaternion()
+    return quaternion
+
+def get_euler_frames(action: bpy.types.Action):
+    x_curve = action.fcurves.find('rotation_euler', index=0)
+    y_curve = action.fcurves.find('rotation_euler', index=1)
+    z_curve = action.fcurves.find('rotation_euler', index=2)
+
+    keyframe_points = x_curve.keyframe_points
+
+    frames = []
+    eulers = []
+    for key in keyframe_points:
+        frame = key.co[0]
+        x_rot = x_curve.evaluate(frame)
+        y_rot = y_curve.evaluate(frame)
+        z_rot = z_curve.evaluate(frame)
+        frames.append(frame)
+        euler = (x_rot, y_rot, z_rot)
+        eulers.append(euler)
+    return frames, eulers
+
+
+def animation_from_quaternions(obj, frames, quaternions):
+    obj.rotation_mode = 'QUATERNION'
+    for frame, q in zip(frames, quaternions):
+        obj.rotation_quaternion = q
+        obj.keyframe_insert(data_path="rotation_quaternion", frame=frame)
+        # obj.keyframe_insert(data_path="rotation_quaternion", frame=frame, index=0, value=q[0])
+        # obj.keyframe_insert(data_path="rotation_quaternion", frame=frame, index=1, value=q[1])
+        # obj.keyframe_insert(data_path="rotation_quaternion", frame=frame, index=2, value=q[2])
+        # obj.keyframe_insert(data_path="rotation_quaternion", frame=frame, index=3, value=q[3])
+
+def remove_scale_furve(obj):
+    action = obj.animation_data.action
+    for i in range(3):
+        fcurve = action.fcurves.find("scale", index=i)
+        if not fcurve:
+            break
+        action.fcurves.remove(fcurve)
+    bpy.ops.object.select_all(action='DESELECT')
+    # rescale object
+    # assume curve scale was 0.01
+    scale = 0.01
+    obj.scale = (scale, scale, scale)
+    obj.select_set(True)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+
+def ue4_toolchain_(operator, context, root, armature, mesh):
+    bpy.ops.object.select_all(action='DESELECT')
+    root.select_set(True)
+    mesh.select_set(True)
+    bpy.ops.object.transform_apply()
+    operator.report({"INFO"}, "Applied transforms to root and mesh")
+    new_mesh: bpy.types.Object = mesh.copy()
+    new_mesh.animation_data_clear()
+    new_mesh.data = mesh.data.copy()
+    new_mesh.parent = None
+    context.scene.collection.objects.link(new_mesh)
+    operator.report({"INFO"}, "Copy and unparent mesh")
+    new_mesh.modifiers.clear()
+    operator.report({"INFO"}, "Clear modifiers on new object")
+    new_mesh.animation_data_clear()
+    new_mesh.animation_data_create()
+    action = armature.animation_data.action.copy()
+    new_mesh.animation_data.action = action
+    operator.report({"INFO"}, "Link armature animation data to mesh")
+    animation_to_shapekey(context, mesh, new_mesh)
+    operator.report({"INFO"}, "Shapekeying animation from old mesh to new mesh")
+    animation_euler_to_quaternions(new_mesh)
+    operator.report({"INFO"}, "Convert euler animation to quaternion")
+    remove_scale_furve(new_mesh)
+    operator.report({"INFO"}, "Clear scale animation")

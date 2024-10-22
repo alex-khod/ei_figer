@@ -188,6 +188,7 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         layout.operator('object.animation_shapekey', text='Shapekey')
         # layout.prop(context.scene, 'skeletal')
         layout.operator('object.animation_bake_transform', text='Bake transform')
+        layout.operator('object.ue4_toolchain')
         # layout.separator()
         # layout.operator('object.debug_test')
 

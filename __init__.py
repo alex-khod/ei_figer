@@ -63,7 +63,8 @@ bl_operators = (
     operators.CAnimation_OP_shapekey,
     operators.CClear_OP_operator,
     operators.CRenameDropPostfix_OP_operator,
-    operators.CDebugTestOperator
+    operators.CAnimation_OP_UE4_Toolchain,
+    operators.CDebugTestOperator,
 )
 
 bl_menus = (
