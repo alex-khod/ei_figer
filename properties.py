@@ -247,10 +247,8 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
     )
     scene.is_export_unique = bpy.props.BoolProperty(
         name='compact',
-        description='If checked, packs model more tightly, reducing mesh size by ~30%.\n'
-                    'Experimental: Packs morph animations as well.\n'
-                    'NOTE: May break morph-animated models due to mismatch in total number of vertices.',
-        default=False
+        description='If checked, packs model uvs/vcs more tightly, reducing mesh size by ~30%.',
+        default=True
     )
     scene.is_ignore_without_morphs = bpy.props.BoolProperty(
         name='ignore without morphs',

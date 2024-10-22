@@ -945,10 +945,9 @@ class CAnimation_OP_Export(bpy.types.Operator):
         else:
             frame_range = scene_utils.get_collection_frame_range(animation_source_name)
 
-        collect_unique = context.scene.is_export_unique
         self.report({'INFO'}, f'Exporting frames from {frame_range[0]} to {frame_range[1]}')
         _, duration = get_duration(lambda : scene_utils.export_animation(context, frame_range, animation_source_name,
-                                                                           res_path, collect_unique))
+                                                                           res_path))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}

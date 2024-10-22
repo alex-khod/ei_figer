@@ -643,9 +643,19 @@ def set_res_file_buffer(index, value):
     setattr(bpy.context.scene, 'res_file_buffer%d' % index, value)
 
 
-def collect_animations(frame_range: Tuple[int, int], collection_name="base", collect_unique=False):
+def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
     anm_list = []
     coll = get_collection(collection_name)
+
+    # base_collection = get_collection('base')
+    # base_obj = base_collection.objects[0]
+    # base_data_2 = np.zeros(n_block_data * 3, dtype=np.float32)
+    # base_obj.data.vertices.foreach_get('co', base_data_2)
+    # base_data_2 = base_data_2.reshape((n_block_data, 3))
+    # base_data_2 = np.unique(base_data_2, axis=0)
+    # print(base_data_2 == basis_data)
+    # breakpoint()
+
     for obj in coll.objects:
         if obj.name[0:2] in bpy.types.Scene.model.morph_comp.values():
             continue #skip morphed objects
@@ -684,8 +694,6 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base", col
                 basis_data = np.zeros(n_morph_frame_vertices * 3, np.float32)
                 basis_block.data.foreach_get('co', basis_data)
                 basis_data = basis_data.reshape((n_morph_frame_vertices, 3))
-                if collect_unique:
-                    basis_data, unique_verts_idx = np.unique(basis_data, axis=0, return_index=True)
 
             block = obj.data.shape_keys.key_blocks[str(frame)]
             if block.value != 1.0:
@@ -700,12 +708,6 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base", col
             frame_data = frame_data - basis_data
             # frame_data = np.zeros((n_morph_frame_vertices, 3), np.float32)
             anm.morphations.append(frame_data)
-
-            # base_collection = get_collection('base')
-            # base_obj = base_collection.objects[0]
-            # base_data_2 = np.zeros(n_block_data * 3, dtype=np.float32)
-            # base_obj.data.vertices.foreach_get('co', base_data_2)
-            # breakpoint()
 
         anm_list.append(anm)
     return CAnimations(anm_list)
@@ -866,31 +868,6 @@ def collect_pos(objects, model_name):
 class ModelExporter:
 
     @staticmethod
-    def calculate_figure_bounds(mesh_group, figure: CFigure, vertices):
-        min_m = []
-        max_m = []
-        for xyz in range(3):
-            min_co = min(vertices, key=lambda vert: vert[xyz])
-            max_co = max(vertices, key=lambda vert: vert[xyz])
-            min_m.append(min_co[xyz])
-            max_m.append(max_co[xyz])
-
-        figure.fmin.append(tuple(min_m))
-        figure.fmax.append(tuple(max_m))
-        # RADIUS
-        figure.radius.append(sqrt(
-            (max_m[0] - min_m[0]) ** 2 + \
-            (max_m[1] - min_m[1]) ** 2 + \
-            (max_m[2] - min_m[2]) ** 2) / 2)
-        # CENTER
-        figure.center.append(mulVector(sumVector(min_m, max_m), 0.5))
-
-        # move min/max to center of model for world objects
-        if mesh_group.type == 'world objects':
-            figure.fmin[-1] = tuple(subVector(figure.fmin[-1], figure.center[-1]))
-            figure.fmax[-1] = tuple(subVector(figure.fmax[-1], figure.center[-1]))
-
-    @staticmethod
     def calculate_figure_bounds_np(figure: CFigure, vertices, obj_group):
         min_m = vertices.min(axis=0)
         max_m = vertices.max(axis=0)
@@ -940,9 +917,6 @@ class ModelExporter:
             figure.header[7] = export_group.ei_group
             figure.header[8] = export_group.t_number
             bpy.context.window_manager.progress_update(n_obj/len_objects * 99)
-            inverse_vertex_idx = None
-            unique_vertex_idx = None
-            inverse_normal_idx = None
             for i in range(obj_count):
                 # TODO: if object has no this morph comp, use previous components (end-point: base)
                 morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
@@ -951,19 +925,6 @@ class ModelExporter:
                 vertices = np.zeros(n_vertex * 3, np.float32)
                 morph_mesh.vertices.foreach_get('co', vertices)
                 vertices.shape = (n_vertex, 3)
-                if collect_unique:
-                    if inverse_vertex_idx is None:
-                        # remove identical vertices. original can be restored as:
-                        # original = unique_val[inverse_idx]
-                        # reindex references / indices:
-                        # reindexed_idx = inverse_idx[idx]
-                        # reorder same-order sequence:
-                        # reordered = normals[unique_idx]
-                        unique_vertices, unique_vertex_idx, inverse_vertex_idx = \
-                            np.unique(vertices, axis=0, return_index=True, return_inverse=True)
-                        vertices = unique_vertices
-                    else:
-                        vertices = vertices[unique_vertex_idx]
                 morph_components = len(vertices)
                 ModelExporter.calculate_figure_bounds_np(figure, vertices, mesh_group)
                 vertices_aligned_4 = ModelExporter.align_length_by_4_np(vertices)
@@ -976,13 +937,6 @@ class ModelExporter:
                 normals.shape = (n_vertex, 3)
                 mesh_normals = normals
                 # reindexed normals from non-duplicate vertices
-                if unique_vertex_idx is not None:
-                    mesh_normals = normals[unique_vertex_idx]
-                    # normal packing is useless - save 0.001% of model size, maybe. a bit more with rounding
-                    # mesh_normals = mesh_normals.round(2)
-                    # figure.mesh_normals = mesh_normals
-                    # mesh_normals, inverse_normal_idx = np.unique(mesh_normals, axis=0, return_inverse=True)
-                    # diff = len(inverse_normal_idx) - len(mesh_normals)
                 n_normals = len(mesh_normals)
                 to_pad = (4 - (n_normals % 4)) % 4
                 normals_aligned_4 = np.zeros((n_normals + to_pad, 4), np.float32)
@@ -992,8 +946,7 @@ class ModelExporter:
                 figure.normals = normals_aligned_4
                 figure.header[5] = morph_components
                 figure.generate_m_c()
-                ModelExporter.collect_base_mesh_np(figure, morph_mesh, mesh_group,
-                                                   inverse_vertex_idx, inverse_normal_idx)
+                ModelExporter.collect_base_mesh_np(figure, morph_mesh, mesh_group, collect_unique)
             figure.name = obj.name
             if obj_count == 1:
                 figure.fillVertices()
@@ -1003,8 +956,7 @@ class ModelExporter:
         return True
 
     @staticmethod
-    def collect_base_mesh_np(figure: CFigure, mesh: bpy.types.Mesh, mesh_group: CItemGroup, inverse_vertex_idx=None,
-                             inverse_normal_idx=None):
+    def collect_base_mesh_np(figure: CFigure, mesh: bpy.types.Mesh, mesh_group: CItemGroup, collect_unique=True):
         n_index = len(mesh.loops)
         vertex_idx = np.zeros(n_index, dtype=np.uint16)
         mesh.loops.foreach_get('vertex_index', vertex_idx)
@@ -1014,28 +966,20 @@ class ModelExporter:
         uv_data.foreach_get('uv', uvs)
         uvs.shape = (n_index, 2)
 
-        packed_uvs = fig_utils.pack_uv_np(uvs, mesh_group.uv_convert_count, mesh_group.uv_base)
-        if inverse_vertex_idx is not None:
-            # unique vvs
-            unique_uvs, inverse_uv_idx = np.unique(packed_uvs, axis=0, return_inverse=True)
-            packed_uvs = unique_uvs
+        if collect_unique:
+            unique_uvs, inverse_uv_idx = np.unique(uvs, axis=0, return_inverse=True)
+            uvs = unique_uvs
             uv_idx = inverse_uv_idx
-            mapped_vertex_idx = inverse_vertex_idx[vertex_idx]
         else:
             uv_idx = np.arange(n_index)
-            mapped_vertex_idx = vertex_idx
+
+        packed_uvs = fig_utils.pack_uv_np(uvs, mesh_group.uv_convert_count, mesh_group.uv_base)
 
         figure.t_coords = packed_uvs
         vertex_components = np.zeros((n_index, 3), dtype=np.uint16)
         # geom/vertex index, normal index, uv index
-        vertex_components[:, 0] = mapped_vertex_idx
-        normal_idx = mapped_vertex_idx
-        if inverse_normal_idx is not None:
-            normal_idx = inverse_normal_idx[mapped_vertex_idx]
-            # restore original and check
-            normals = figure.normals[normal_idx][:, :3]
-            original_normals = figure.mesh_normals[mapped_vertex_idx]
-            assert ((normals == original_normals).all())
+        vertex_components[:, 0] = vertex_idx
+        normal_idx = vertex_idx
         vertex_components[:, 1] = normal_idx
         vertex_components[:, 2] = uv_idx
 
@@ -1655,12 +1599,12 @@ def bake_transform_animation_frame(context, donor, acceptor, frame):
     bpy.data.objects.remove(frame_donor, do_unlink=True)
 
 @profile
-def export_animation(context, frame_range, animation_source_name, res_path, collect_unique=False):
+def export_animation(context, frame_range, animation_source_name, res_path):
     animation_name = context.scene.animation_name
     model_name = context.scene.figmodel_name
 
     links = collect_links(animation_source_name)
-    animations = collect_animations(frame_range, animation_source_name, collect_unique)
+    animations = collect_animations(frame_range, animation_source_name)
     blender2abs_rotations(links, animations)
     abs2ei_rotations(links, animations)
 
