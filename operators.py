@@ -939,14 +939,15 @@ class CAnimation_OP_Export(bpy.types.Operator):
         self.report({'INFO'}, f'Renaming .001-like names for "{animation_source_name}"')
         scene_utils.rename_drop_postfix(scene_utils.get_collection(animation_source_name).objects)
 
-
-        if context.scene.is_use_mesh_frame_range:
+        is_use_mesh_frame_range = context.scene.is_use_mesh_frame_range
+        self.report({'INFO'}, f'Use mesh frame range: {is_use_mesh_frame_range}')
+        if is_use_mesh_frame_range:
             frame_range = context.scene.frame_start, context.scene.frame_end
         else:
             frame_range = scene_utils.get_collection_frame_range(animation_source_name)
 
         self.report({'INFO'}, f'Exporting frames from {frame_range[0]} to {frame_range[1]}')
-        _, duration = get_duration(lambda : scene_utils.export_animation(context, frame_range, animation_source_name,
+        _, duration = get_duration(lambda: scene_utils.export_animation(context, frame_range, animation_source_name,
                                                                            res_path))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
@@ -971,9 +972,8 @@ class CAnimation_OP_shapekey(bpy.types.Operator):
 class CAnimation_OP_BakeTransform(bpy.types.Operator):
     bl_label = 'Bake transform operator'
     bl_idname = 'object.animation_bake_transform'
-    bl_description = 'For each object in selection, moves location / rotation / scale\n' \
-                     'animation into shapekeys ignores objects with shapekeys (morph animation)\n' \
-                     'Uses scene frame range'
+    bl_description = 'For each object in selection, moves location / rotation / scale animation into shapekeys.\n' \
+                     'Ignores objects with shapekeys (morph animation)'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing bake transform')

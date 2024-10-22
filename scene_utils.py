@@ -1482,6 +1482,7 @@ def report_info(message, title="Note", icon="INFO"):
     bpy.context.window_manager.popup_menu(lambda self, context: self.layout.label(text=message),
                                           title=title, icon=icon)
 
+
 def get_root_objects(objects: typing.Sequence[bpy.types.Object], all=False):
     root_objects = []
     for obj in objects:
@@ -1492,10 +1493,8 @@ def get_root_objects(objects: typing.Sequence[bpy.types.Object], all=False):
     assert (len(root_objects) == 1)
     return root_objects[0]
 
-def get_collection_frame_range(collection_name):
-    coll = get_collection(collection_name)
-    obj = get_root_objects(coll.objects)
 
+def get_object_frame_range(obj):
     if not obj.animation_data or not obj.animation_data.action:
         return None
 
@@ -1510,8 +1509,14 @@ def get_collection_frame_range(collection_name):
         start_frame = min(frame_range)
         end_frame = max(frame_range)
         return int(start_frame), int(end_frame)
-
     return None
+
+
+def get_collection_frame_range(collection_name):
+    coll = get_collection(collection_name)
+    obj = get_root_objects(coll.objects)
+    return get_object_frame_range(obj)
+
 
 def bake_transform_animation(context):
     # create a copy of object -> acceptor
@@ -1535,12 +1540,24 @@ def bake_transform_animation(context):
     if skipped:
         report_info(f"Skipped {skipped} - already has shapekey animation", icon="QUESTION")
 
-    #collection_name = "base"
-    #frame_range = get_collection_frame_range(collection_name)
-    # if frame_range is None:
-    #     raise Exception(f"No animation detected for {collection_name} root object")
-    frame_range = context.scene.frame_start, context.scene.frame_end
+    if not to_process:
+        report_info(f"Done - nothing to do")
+        return
 
+    is_use_mesh_frame_range = context.scene.is_use_mesh_frame_range
+    report_info(f'Use mesh frame range: {is_use_mesh_frame_range}')
+    if is_use_mesh_frame_range:
+        # TODO: try multiple objects?
+        frame_range = get_object_frame_range(to_process[0])
+    else:
+        frame_range = context.scene.frame_start, context.scene.frame_end
+
+    if frame_range is None:
+        report_info(f"Couldn't determine frame range from mesh.", icon="ERROR")
+        return
+
+    frame_start, frame_end = frame_range
+    report_info(f"Baking transform from frame {frame_start} to {frame_end}")
     # prepare
     context.scene.frame_set(999)
     pairs = []
@@ -1548,9 +1565,7 @@ def bake_transform_animation(context):
         donor, acceptor = bake_make_acceptor(context, obj)
         pairs.append((donor, acceptor))
     # main run
-    frame_start, frame_end = frame_range
-    frames = list(range(frame_start, frame_end + 1))
-    for frame in frames:
+    for frame in range(frame_start, frame_end+1):
         context.scene.frame_set(frame)
         for donor, acceptor in pairs:
             bake_transform_animation_frame(context, donor, acceptor, frame)
