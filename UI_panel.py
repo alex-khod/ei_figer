@@ -174,6 +174,7 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         layout.prop(context.scene, 'animation_name')
 
         layout.prop(context.scene, 'animsubfix')
+        layout.prop(context.scene, 'is_export_unique')
         layout.prop(context.scene, 'is_animation_to_new_collection')
         use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
         label = operators.CAnimation_OP_import.bl_label % use_collection

@@ -939,14 +939,16 @@ class CAnimation_OP_Export(bpy.types.Operator):
         self.report({'INFO'}, f'Renaming .001-like names for "{animation_source_name}"')
         scene_utils.rename_drop_postfix(scene_utils.get_collection(animation_source_name).objects)
 
+
         if context.scene.is_use_mesh_frame_range:
             frame_range = context.scene.frame_start, context.scene.frame_end
         else:
             frame_range = scene_utils.get_collection_frame_range(animation_source_name)
 
+        collect_unique = context.scene.is_export_unique
         self.report({'INFO'}, f'Exporting frames from {frame_range[0]} to {frame_range[1]}')
         _, duration = get_duration(lambda : scene_utils.export_animation(context, frame_range, animation_source_name,
-                                                                           res_path))
+                                                                           res_path, collect_unique))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}

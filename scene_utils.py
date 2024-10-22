@@ -643,7 +643,7 @@ def set_res_file_buffer(index, value):
     setattr(bpy.context.scene, 'res_file_buffer%d' % index, value)
 
 
-def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
+def collect_animations(frame_range: Tuple[int, int], collection_name="base", collect_unique=False):
     anm_list = []
     coll = get_collection(collection_name)
     for obj in coll.objects:
@@ -660,6 +660,7 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
         frame_start, frame_end = frame_range
 
         basis_block = None
+        unique_verts_idx = None
         for frame in range(frame_start, frame_end + 1):
             #rotations
             bpy.context.scene.frame_set(frame) #choose frame
@@ -683,6 +684,8 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
                 basis_data = np.zeros(n_morph_frame_vertices * 3, np.float32)
                 basis_block.data.foreach_get('co', basis_data)
                 basis_data = basis_data.reshape((n_morph_frame_vertices, 3))
+                if collect_unique:
+                    basis_data, unique_verts_idx = np.unique(basis_data, axis=0, return_index=True)
 
             block = obj.data.shape_keys.key_blocks[str(frame)]
             if block.value != 1.0:
@@ -692,9 +695,17 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
             frame_data = np.zeros(n_block_data * 3, dtype=np.float32)
             block.data.foreach_get('co', frame_data)
             frame_data = frame_data.reshape((n_morph_frame_vertices, 3))
+            if unique_verts_idx is not None:
+                frame_data = frame_data[unique_verts_idx]
             frame_data = frame_data - basis_data
             # frame_data = np.zeros((n_morph_frame_vertices, 3), np.float32)
             anm.morphations.append(frame_data)
+
+            # base_collection = get_collection('base')
+            # base_obj = base_collection.objects[0]
+            # base_data_2 = np.zeros(n_block_data * 3, dtype=np.float32)
+            # base_obj.data.vertices.foreach_get('co', base_data_2)
+            # breakpoint()
 
         anm_list.append(anm)
     return CAnimations(anm_list)
@@ -1644,12 +1655,12 @@ def bake_transform_animation_frame(context, donor, acceptor, frame):
     bpy.data.objects.remove(frame_donor, do_unlink=True)
 
 @profile
-def export_animation(context, frame_range, animation_source_name, res_path):
+def export_animation(context, frame_range, animation_source_name, res_path, collect_unique=False):
     animation_name = context.scene.animation_name
     model_name = context.scene.figmodel_name
 
     links = collect_links(animation_source_name)
-    animations = collect_animations(frame_range, animation_source_name)
+    animations = collect_animations(frame_range, animation_source_name, collect_unique)
     blender2abs_rotations(links, animations)
     abs2ei_rotations(links, animations)
 
