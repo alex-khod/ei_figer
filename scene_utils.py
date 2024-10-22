@@ -25,17 +25,17 @@ import collections as py_collections
 from typing import Set, Tuple, List
 import numpy as np
 
-
-from . utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
+from .utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
 from . import utils as fig_utils
-from . bone import CBone
+from .bone import CBone
 from . import figure
+
 CFigure = figure.CFigure
-from . resfile import ResFile
-from . scene_management import CModel, CAnimations
-from . animation import CAnimation
-from . links import CLink
-from . utils import CByteReader
+from .resfile import ResFile
+from .scene_management import CModel, CAnimations
+from .animation import CAnimation
+from .links import CLink
+from .utils import CByteReader
 
 profilehooks = None
 try:
@@ -43,6 +43,7 @@ try:
 except ImportError:
     print("No profilehooks")
     pass
+
 
 class TemporaryContext:
 
@@ -60,18 +61,22 @@ class TemporaryContext:
             traceback.print_exception(exc_type, exc_value, tb)
         bpy.context.area.ui_type = self.prev_ui
 
+
 def profile(func):
     if profilehooks is not None:
         return profilehooks.profile(immediate=True)(func)
     else:
         return func
 
+
 def MODEL() -> CModel:
     return bpy.context.scene.model
 
-def get_collection(collection_name = "base") -> bpy.types.Collection:
+
+def get_collection(collection_name="base") -> bpy.types.Collection:
     collection = bpy.data.collections.get(collection_name)
     return collection
+
 
 def rename_serial(old_obj, name):
     count = 1
@@ -81,6 +86,7 @@ def rename_serial(old_obj, name):
         rename_old = f"{name}.{count:03d}"
     old_obj.name = rename_old
 
+
 def rename_drop_postfix(objects):
     for obj in objects:
         name = obj.name.rsplit('.')[0]
@@ -89,38 +95,41 @@ def rename_drop_postfix(objects):
             rename_serial(bpy.data.objects.get(name), name)
         obj.name = name
 
-def read_links(lnk_res : ResFile, lnk_name : str):
+
+def read_links(lnk_res: ResFile, lnk_name: str):
     with lnk_res.open(lnk_name) as lnk_res:
         data = lnk_res.read()
         lnk = CLink()
         lnk.read_lnk(data)
     return lnk
 
-def read_figure(fig_res : ResFile, fig_name : str):
-    active_model : CModel = bpy.types.Scene.model
+
+def read_figure(fig_res: ResFile, fig_name: str):
+    active_model: CModel = bpy.types.Scene.model
     err = 0
     with fig_res.open(fig_name) as fig_res:
         data = fig_res.read()
         fig = CFigure()
         err += fig.read_fig(fig_name, data)
         active_model.mesh_list.append(fig)
-        #bon = CBone()
-        #err += bon.read_bonvec(fig_name, [1,1,1])
-        #active_model.pos_list.append(bon)
-        #bpy.context.scene.cursor.location = (1,1,1)
-        #bpy.context.scene.tool_settings.transform_pivot_point
+        # bon = CBone()
+        # err += bon.read_bonvec(fig_name, [1,1,1])
+        # active_model.pos_list.append(bon)
+        # bpy.context.scene.cursor.location = (1,1,1)
+        # bpy.context.scene.tool_settings.transform_pivot_point
     return err
-    
-def read_figSignature(resFile : ResFile, model_name):
+
+
+def read_figSignature(resFile: ResFile, model_name):
     with resFile.open(model_name + '.mod') as meshes_container:
         mesh_list_res = ResFile(meshes_container)
         for fig_name in mesh_list_res.get_filename_list():
-            active_model : CModel = bpy.types.Scene.model
+            active_model: CModel = bpy.types.Scene.model
             print(' fig_name for signature: ' + fig_name)
             with fig_res.open(fig_name) as fig_res:
                 data = fig_res.read()
                 fig = CFigure()
-            
+
                 parser = CByteReader(data)
                 signature = parser.read('ssss').decode()
                 if signature == 'FIG8':
@@ -128,8 +137,9 @@ def read_figSignature(resFile : ResFile, model_name):
                 else:
                     return 1
 
-def read_bone(bon_res : ResFile, bon_name : str):
-    active_model : CModel = bpy.types.Scene.model
+
+def read_bone(bon_res: ResFile, bon_name: str):
+    active_model: CModel = bpy.types.Scene.model
     err = 0
     with bon_res.open(bon_name) as bon_res:
         data = bon_res.read()
@@ -138,7 +148,8 @@ def read_bone(bon_res : ResFile, bon_name : str):
         active_model.pos_list.append(bon)
     return err
 
-def read_model(resFile : ResFile, model_name, include_meshes=None):
+
+def read_model(resFile: ResFile, model_name, include_meshes=None):
     with resFile.open(model_name + '.mod') as meshes_container:
         mesh_list_res = ResFile(meshes_container)
         links_name = model_name
@@ -152,22 +163,24 @@ def read_model(resFile : ResFile, model_name, include_meshes=None):
             read_figure(mesh_list_res, mesh_name)
         return links
 
-def read_bones(resFile : ResFile, model_name):
+
+def read_bones(resFile: ResFile, model_name):
     err = 0
-    #bones container
+    # bones container
     with resFile.open(model_name + '.bon') as bone_container:
         bone_list_res = ResFile(bone_container)
         for bone_name in bone_list_res.get_filename_list():
             err += read_bone(bone_list_res, bone_name)
     return err
 
-def read_animations(resFile : ResFile, model_name : str, animation_name : str) -> CAnimations:
+
+def read_animations(resFile: ResFile, model_name: str, animation_name: str) -> CAnimations:
     anm_list = []
     with resFile.open(model_name + '.anm') as animation_container:
         anm_res_file = ResFile(animation_container)
         with anm_res_file.open(animation_name) as animation_file:
             animation_res = ResFile(animation_file)
-            for part_name in animation_res.get_filename_list(): #set of parts
+            for part_name in animation_res.get_filename_list():  # set of parts
                 with animation_res.open(part_name) as part_res:
                     part = part_res.read()
                     anm = CAnimation()
@@ -175,12 +188,14 @@ def read_animations(resFile : ResFile, model_name : str, animation_name : str) -
                     anm_list.append(anm)
     return CAnimations(anm_list)
 
+
 def ensure_morph_collections():
     active_model: CModel = bpy.types.Scene.model
     for collection_name in active_model.morph_collection:
         if collection_name not in bpy.data.collections:
             collection = bpy.data.collections.new(collection_name)
             bpy.context.scene.collection.children.link(collection)
+
 
 def import_mod_file(res_file, model_name, include_meshes=None):
     print("reading mod")
@@ -193,6 +208,7 @@ def import_mod_file(res_file, model_name, include_meshes=None):
     if not bEtherlord:
         read_bones(res_file, model_name)
     create_model_meshes(model_links)
+
 
 def import_lnk_fig_bon_files(res_file, model_name, include_meshes=None):
     print("reading lnk")
@@ -247,8 +263,9 @@ def create_model_meshes(links: CLink, include_meshes=None):
         morph_count = container.get_item_group(bone.name).morph_component_count
         set_pos_2(bone, morph_count)
 
+
 @profile
-def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
+def import_model(context, res_file, model_name, include_meshes: Set[str] = None):
     if (model_name + '.mod') in res_file.get_filename_list():
         import_mod_file(res_file, model_name, include_meshes)
     elif (model_name + '.lnk') in res_file.get_filename_list():
@@ -257,9 +274,11 @@ def import_model(context, res_file, model_name, include_meshes: Set[str]=None):
         return None
     return True
 
+
 def get_morph_collections(start_index=1):
     collections = [get_collection(collection_name) for collection_name in CModel.morph_names[start_index:]]
     return collections
+
 
 def get_base_members_without_morphs():
     without_morphs = py_collections.defaultdict(list)
@@ -269,6 +288,7 @@ def get_base_members_without_morphs():
             if morph_member_name not in collection.objects:
                 without_morphs[base_obj.name].append(morph_member_name)
     return without_morphs
+
 
 @profile
 def export_model(context, res_path, model_name, include_meshes=None):
@@ -287,6 +307,7 @@ def export_model(context, res_path, model_name, include_meshes=None):
             if exclude_meshes and obj.name in exclude_meshes:
                 return False
             return True
+
         return filter_
 
     base_collection = get_collection("base")
@@ -373,12 +394,12 @@ def ei2abs_rotations(links: CLink, animations: CAnimations):
     Calculates absolute rotations for parts in links, based on EI values
     """
     lnk = links.links
-    #TODO: check if links correctly (None parent has only 1 obj and other)
+    # TODO: check if links correctly (None parent has only 1 obj and other)
     if not links:
         raise Exception("Error: empty links")
 
-    def calc_frames(part : CAnimation):
-        if lnk[part.name] is None: #root object
+    def calc_frames(part: CAnimation):
+        if lnk[part.name] is None:  # root object
             part.abs_rotation = cp.deepcopy(part.rotations)
         else:
             parent_anm = animations.get_animation(lnk[part.name])
@@ -396,25 +417,27 @@ def ei2abs_rotations(links: CLink, animations: CAnimations):
         else:
             calc_frames(anm)
 
+
 def abs2ei_rotations(links: CLink, animations: CAnimations):
     lnk = links.links
 
-    def calc_frames(part : CAnimation):
+    def calc_frames(part: CAnimation):
         if lnk[part.name] is None:
             return
-        
+
         for i in range(len(part.rotations)):
             parent_rot = cp.deepcopy(animations.get_animation(lnk[part.name]).abs_rotation[i])
             parent_rot_invert = parent_rot.inverted().copy()
             parent_rot_invert.rotate(part.abs_rotation[i])
             part.rotations[i] = parent_rot_invert.copy()
-    
+
     for part in lnk.keys():
         anm = animations.get_animation(part)
         if anm is None:
             print('animation for ' + part + ' not found')
         else:
             calc_frames(anm)
+
 
 def abs2Blender_rotations(links: CLink, animations: CAnimations):
     """
@@ -422,18 +445,18 @@ def abs2Blender_rotations(links: CLink, animations: CAnimations):
     """
     lnk = links.links
 
-    def calc_frames(part : CAnimation):
+    def calc_frames(part: CAnimation):
         if lnk[part.name] is None:
             return
-        
+
         for i in range(len(part.rotations)):
             parent_rot = cp.deepcopy(animations.get_animation(lnk[part.name]).abs_rotation[i])
             parent_rot_invert = parent_rot.inverted().copy()
-            child_rot : Quaternion = parent_rot.copy()
+            child_rot: Quaternion = parent_rot.copy()
             child_rot.rotate(part.rotations[i])
             part.rotations[i] = child_rot.copy()
             part.rotations[i].rotate(parent_rot_invert)
-    
+
     for part in lnk.keys():
         anm = animations.get_animation(part)
         if anm is None:
@@ -441,14 +464,15 @@ def abs2Blender_rotations(links: CLink, animations: CAnimations):
         else:
             calc_frames(anm)
 
+
 def blender2abs_rotations(links: CLink, animations: CAnimations):
     lnk = links.links
-    #TODO: check if links correctly (None parent has only 1 obj and other)
+    # TODO: check if links correctly (None parent has only 1 obj and other)
     if not links:
         raise Exception("Error: empty links")
 
-    def calc_frames(part : CAnimation):
-        if lnk[part.name] is None: #root object
+    def calc_frames(part: CAnimation):
+        if lnk[part.name] is None:  # root object
             part.abs_rotation = cp.deepcopy(part.rotations)
         else:
             parent_anm = animations.get_animation(lnk[part.name])
@@ -457,7 +481,7 @@ def blender2abs_rotations(links: CLink, animations: CAnimations):
             part.abs_rotation = cp.deepcopy(part.rotations)
             for i in range(len(part.rotations)):
                 part.abs_rotation[i].rotate(parent_anm.abs_rotation[i])
-    
+
     for part in lnk.keys():
         anm = animations.get_animation(part)
         if anm is None:
@@ -466,6 +490,7 @@ def blender2abs_rotations(links: CLink, animations: CAnimations):
             calc_frames(anm)
 
     return 0
+
 
 def tris_mesh_from_pydata(mesh: bpy.types.Mesh, vertices: np.array, triangles: np.array):
     vertices_len = len(vertices)
@@ -492,10 +517,11 @@ def tris_mesh_from_pydata(mesh: bpy.types.Mesh, vertices: np.array, triangles: n
     #         calc_edges_loose=bool(False),
     #     )
 
+
 # @profile
 def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     # create mesh, replacing old in collection or renaming same-named mesh elsewhere
-    active_model : CModel = bpy.context.scene.model
+    active_model: CModel = bpy.context.scene.model
 
     n_indices = figure.header[3] - figure.header[3] % 3
     indexes = figure.indicies[:n_indices]
@@ -543,16 +569,18 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
         mesh.uv_layers[0].data.foreach_set('uv', uvs_flat)
         mesh.update()
 
-def set_pos_2(bone : CBone, morph_count):
-    active_model : CModel = bpy.context.scene.model
-    
+
+def set_pos_2(bone: CBone, morph_count):
+    active_model: CModel = bpy.context.scene.model
+
     for obj_num in range(morph_count):
         name = active_model.morph_comp[obj_num] + bone.name
         if name in bpy.data.objects:
             obj = bpy.data.objects[name]
             obj.location = bone.pos[obj_num]
-    
+
     return 0
+
 
 def create_links_2(link: CLink, obj_count=1):
     active_model: CModel = bpy.context.scene.model
@@ -564,13 +592,14 @@ def create_links_2(link: CLink, obj_count=1):
             parent_name = active_model.morph_comp[obj_num] + parent
             if part_name in bpy.data.objects and parent_name in bpy.data.objects:
                 bpy.data.objects[part_name].parent = bpy.data.objects[parent_name]
-    
+
     return 0
+
 
 def clear_animation_data(collection_name: str = "base"):
     base_rotation = Quaternion((1, 0, 0, 0))
     bpy.context.scene.frame_set(0)
-    model : CModel = bpy.types.Scene.model
+    model: CModel = bpy.types.Scene.model
 
     collection = get_collection(collection_name)
     for obj in collection.objects:
@@ -586,13 +615,15 @@ def clear_animation_data(collection_name: str = "base"):
     bpy.context.scene.frame_start = 1
     bpy.context.scene.frame_end = 250
 
-def insert_keyframe(sk, f):
-    sk.keyframe_insert("value", frame=f-1)
-    sk.keyframe_insert("value", frame=f+1)
-    sk.value = 1.0
-    sk.keyframe_insert("value", frame=f)   
 
-def insert_animation(to_collection: str, anm_list : CAnimations):
+def insert_keyframe(sk, f):
+    sk.keyframe_insert("value", frame=f - 1)
+    sk.keyframe_insert("value", frame=f + 1)
+    sk.value = 1.0
+    sk.keyframe_insert("value", frame=f)
+
+
+def insert_animation(to_collection: str, anm_list: CAnimations):
     clear_animation_data(to_collection)
 
     for part in anm_list:
@@ -603,23 +634,23 @@ def insert_animation(to_collection: str, anm_list : CAnimations):
         obj = bpy.data.objects[part.name]
         obj.rotation_mode = 'QUATERNION'
         bpy.context.scene.frame_end = 0
-        bpy.context.scene.frame_end = len(part.rotations)-1 #for example, 43 frames from 0 to 42
+        bpy.context.scene.frame_end = len(part.rotations) - 1  # for example, 43 frames from 0 to 42
         for frame in range(len(part.rotations)):
-            #rotations
-            bpy.context.scene.frame_set(frame) #choose frame
+            # rotations
+            bpy.context.scene.frame_set(frame)  # choose frame
             obj.rotation_quaternion = part.rotations[frame]
             obj.keyframe_insert(data_path='rotation_quaternion', index=-1)
-            #positions
+            # positions
             bEtherlord = bpy.context.scene.ether
             if not bEtherlord:
-                if obj.parent is None: #root
+                if obj.parent is None:  # root
                     obj.location = part.translations[frame]
                     obj.keyframe_insert(data_path='location', index=-1)
             else:
                 obj.location = part.translations[frame]
                 obj.keyframe_insert(data_path='location', index=-1)
-            
-        #morphations
+
+        # morphations
         if len(part.morphations) > 0:
             n_vertices = len(obj.data.vertices)
             vertices_data = np.zeros(n_vertices * 3, np.float32)
@@ -636,8 +667,10 @@ def insert_animation(to_collection: str, anm_list : CAnimations):
                 insert_keyframe(key, frame)
     return True
 
+
 def get_res_file_buffer(index):
     return getattr(bpy.context.scene, 'res_file_buffer%d' % index)
+
 
 def set_res_file_buffer(index, value):
     setattr(bpy.context.scene, 'res_file_buffer%d' % index, value)
@@ -658,7 +691,7 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
 
     for obj in coll.objects:
         if obj.name[0:2] in bpy.types.Scene.model.morph_comp.values():
-            continue #skip morphed objects
+            continue  # skip morphed objects
 
         if obj.animation_data is None and (not obj.data.shape_keys):
             continue
@@ -672,14 +705,14 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
         basis_block = None
         unique_verts_idx = None
         for frame in range(frame_start, frame_end + 1):
-            #rotations
-            bpy.context.scene.frame_set(frame) #choose frame
+            # rotations
+            bpy.context.scene.frame_set(frame)  # choose frame
             anm.rotations.append(Quaternion(obj.rotation_quaternion))
-            #positions
+            # positions
             bEtherlord = bpy.context.scene.ether
             if not bEtherlord:
                 print('object ' + anm.name + ' loc is ' + str(obj.location))
-                if obj.parent is None: #root
+                if obj.parent is None:  # root
                     anm.translations.append(obj.location.copy())
             else:
                 anm.translations.append(obj.location.copy())
@@ -713,15 +746,14 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
     return CAnimations(anm_list)
 
 
-
-def create_hierarchy(links : dict[str, str]):
+def create_hierarchy(links: dict[str, str]):
     '''
     sets parent for objects in lnks
     '''
     for key, value in links.items():
         if value is None:
             continue
-        
+
         if key in bpy.data.objects and value in bpy.data.objects:
             bpy.data.objects[key].parent = bpy.data.objects[value]
         else:
@@ -735,13 +767,14 @@ def check_morph_items(base_collection, morph_collection: bpy.types.Collection, m
         name = morph_prefix + base_obj.name
         obj = morph_collection.objects.get(name)
         if not obj:
-            print (f"Missing morph object {name}")
+            print(f"Missing morph object {name}")
             bad_objects.append(name)
             continue
         if len(base_obj.data.vertices) != len(obj.data.vertices):
             print(f"Uneqal mesh length for mesh {name}")
             bad_objects.append(name)
     return bad_objects
+
 
 def is_model_correct(model_name):
     obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
@@ -774,15 +807,15 @@ def is_model_correct(model_name):
 
     root_list = []
     base_coll = get_collection()
-    #check if root object only 1
+    # check if root object only 1
     for obj in base_coll.objects:
         if obj.type != 'MESH':
             continue
-        
+
         if obj.parent is None:
             root_list.append(obj.name)
 
-        mesh : bpy.types.Mesh = obj.data
+        mesh: bpy.types.Mesh = obj.data
         if mesh.uv_layers.active_index < 0:
             print('mesh ' + mesh.name + ' has no active uv layer (UV map)')
             return False
@@ -796,7 +829,7 @@ def is_model_correct(model_name):
     if len(root_list) != 1:
         print('incorrect root objects, must be only one, exist: ' + str(root_list))
 
-    #check assembly name
+    # check assembly name
     for obj in base_coll.objects:
         if obj.name == MODEL().name:
             print(f'object {obj.name} must not be the same as model name. input another name for model or object')
@@ -804,11 +837,12 @@ def is_model_correct(model_name):
 
     return True
 
-def parts_ordered(links : dict[str, str], links_out : dict[str, str], root):
+
+def parts_ordered(links: dict[str, str], links_out: dict[str, str], root):
     '''
     converts hierarchy to ordered list
     '''
-    candidates=dict()
+    candidates = dict()
     if links[root] is None:
         links_out[root] = None
 
@@ -819,9 +853,9 @@ def parts_ordered(links : dict[str, str], links_out : dict[str, str], root):
         if parent == root:
             candidates[child] = parent
 
-    #alphabetical dict sort
+    # alphabetical dict sort
     od = py_collections.OrderedDict(sorted(candidates.items()))
-    #len(key) dict sort
+    # len(key) dict sort
     new_d = {}
     for k in sorted(od, key=len):
         new_d[k] = od[k]
@@ -829,7 +863,7 @@ def parts_ordered(links : dict[str, str], links_out : dict[str, str], root):
     for child, parent in new_d.items():
         links_out[child] = parent
         parts_ordered(links, links_out, child)
-    
+
 
 def collect_links(collection_name="base"):
     lnk = CLink()
@@ -840,10 +874,11 @@ def collect_links(collection_name="base"):
             continue
         lnk.add(obj.name, obj.parent.name if obj.parent is not None else None)
 
-    lnk_ordered : dict[str, str] = dict()
+    lnk_ordered: dict[str, str] = dict()
     parts_ordered(lnk.links, lnk_ordered, lnk.root)
     lnk.links = lnk_ordered
     return lnk
+
 
 def collect_pos(objects, model_name):
     err = 0
@@ -852,11 +887,11 @@ def collect_pos(objects, model_name):
         bone = CBone()
         for i in range(obj_count):
             morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
-            #TODO: if object has no this morph comp, use previous components (end-point: base)
+            # TODO: if object has no this morph comp, use previous components (end-point: base)
             morph_obj = morph_coll.objects[MODEL().morph_comp[i] + obj.name]
             bone.pos.append(morph_obj.location[:])
-            #print(str(obj.name) + '.bonename, objcount' + str(obj_count) + ' loc ' + str(morph_obj.location[:]))
-       
+            # print(str(obj.name) + '.bonename, objcount' + str(obj_count) + ' loc ' + str(morph_obj.location[:]))
+
         bone.name = obj.name
 
         if obj_count == 1:
@@ -864,6 +899,7 @@ def collect_pos(objects, model_name):
 
         MODEL().pos_list.append(bone)
     return err
+
 
 class ModelExporter:
 
@@ -875,7 +911,7 @@ class ModelExporter:
         figure.fmin.append(tuple(min_m))
         figure.fmax.append(tuple(max_m))
         # RADIUS
-        figure.radius.append((((max_m - min_m) ** 2).sum() ** 1/2) / 2)
+        figure.radius.append((((max_m - min_m) ** 2).sum() ** 1 / 2) / 2)
         # CENTER
         figure.center.append(mulVector(sumVector(min_m, max_m), 0.5))
 
@@ -905,7 +941,8 @@ class ModelExporter:
         MODEL().mesh_list = []
         model_group = CItemGroupContainer().get_item_group(MODEL().name)
         obj_count = model_group.morph_component_count
-        individual_group = ['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2', 'weapons left',
+        individual_group = ['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2',
+                            'weapons left',
                             'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
 
         len_objects = len(objects)
@@ -916,7 +953,7 @@ class ModelExporter:
 
             figure.header[7] = export_group.ei_group
             figure.header[8] = export_group.t_number
-            bpy.context.window_manager.progress_update(n_obj/len_objects * 99)
+            bpy.context.window_manager.progress_update(n_obj / len_objects * 99)
             for i in range(obj_count):
                 # TODO: if object has no this morph comp, use previous components (end-point: base)
                 morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
@@ -949,8 +986,8 @@ class ModelExporter:
                 ModelExporter.collect_base_mesh_np(figure, morph_mesh, mesh_group, collect_unique)
             figure.name = obj.name
             if obj_count == 1:
-                figure.fillVertices()
-                figure.fillAux()
+                figure.fill_vertices()
+                figure.fill_aux()
 
             MODEL().mesh_list.append(figure)
         return True
@@ -995,7 +1032,7 @@ class ModelExporter:
         figure.header[4] = len(figure.v_c)
 
 
-def unhide_collections_recursive(base_collection: bpy.types.LayerCollection=None):
+def unhide_collections_recursive(base_collection: bpy.types.LayerCollection = None):
     if base_collection is None:
         view_layer: bpy.types.ViewLayer = bpy.context.view_layer
         base_collection = view_layer.layer_collection
@@ -1005,6 +1042,7 @@ def unhide_collections_recursive(base_collection: bpy.types.LayerCollection=None
         if collection.children:
             unhide_collections_recursive(collection)
 
+
 def unhide_objects(base_collection=None):
     for collection in bpy.context.scene.collection.children:
         collection: bpy.types.Collection
@@ -1012,6 +1050,7 @@ def unhide_objects(base_collection=None):
         for obj in collection.all_objects:
             obj.hide_set(False)
             obj.select_set(True)
+
 
 def clear_old_morphs(start_index=1, include_meshes=None):
     return NotImplemented
@@ -1024,6 +1063,7 @@ def clear_old_morphs(start_index=1, include_meshes=None):
     #             bpy.data.objects.remove(obj)
     # return True
 
+
 def clear_collection(collection_name):
     collection = get_collection(collection_name)
     if collection is None:
@@ -1032,6 +1072,7 @@ def clear_collection(collection_name):
     with TemporaryContext('VIEW_3D'):
         bpy.ops.outliner.orphans_purge(do_recursive=True)
 
+
 def clear_morph_collections(start_index=1):
     for collection_name in MODEL().morph_collection[start_index:]:
         collection = bpy.data.collections.get(collection_name)
@@ -1039,6 +1080,7 @@ def clear_morph_collections(start_index=1):
             bpy.data.collections.remove(collection)
     with TemporaryContext('VIEW_3D'):
         bpy.ops.outliner.orphans_purge(do_recursive=True)
+
 
 def clear_unlinked_data():
     with TemporaryContext("VIEW_3D"):
@@ -1052,6 +1094,7 @@ def clear_unlinked_data():
     for col in bpy.data.collections:
         if col.users == 0:
             bpy.data.collections.remove(col)
+
 
 def scene_clear():
     '''
@@ -1069,15 +1112,16 @@ def scene_clear():
     for rem_mesh in bpy.data.meshes:
         if rem_mesh.users == 0:
             bpy.data.meshes.remove(rem_mesh)
-    #the blender does not have a single solution for cleaning the scene. this method was invented to try to clean up the scene in any way =\
+    # the blender does not have a single solution for cleaning the scene. this method was invented to try to clean up the scene in any way =\
     if len(bpy.data.objects) > 0:
         for obj in bpy.data.objects:
             bpy.data.objects.remove(obj)
         scene_clear()
-    
-    #restore animation data to default
+
+    # restore animation data to default
     bpy.context.scene.frame_end = 250
     bpy.context.scene.frame_set(1)
+
 
 def triangulate(cur_obj):
     mesh = cur_obj.data
@@ -1086,6 +1130,7 @@ def triangulate(cur_obj):
     bmesh.ops.triangulate(blender_mesh, faces=blender_mesh.faces[:], quad_method='BEAUTY', ngon_method='BEAUTY')
     blender_mesh.to_mesh(mesh)
     blender_mesh.free()
+
 
 def to_object_mode():
     '''
@@ -1121,6 +1166,7 @@ def add_morph_comp(act_obj, morph_component):
     else:
         print(act_obj.name + ' it is a bad object to add morph component, try another object')
 
+
 def calculate_mesh(self, context):
     '''
     calculates test unit using data (str, dex, height) from scene
@@ -1134,14 +1180,14 @@ def calculate_mesh(self, context):
             for vert in bpy.data.meshes[t_mesh].vertices:
                 for i in range(3):
                     temp1 = m_verts[0][vert.index][i] + \
-                        (m_verts[1][vert.index][i] - m_verts[0][vert.index][i]) * q_str
+                            (m_verts[1][vert.index][i] - m_verts[0][vert.index][i]) * q_str
                     temp2 = m_verts[2][vert.index][i] + \
-                        (m_verts[3][vert.index][i] - m_verts[2][vert.index][i]) * q_str
+                            (m_verts[3][vert.index][i] - m_verts[2][vert.index][i]) * q_str
                     value1 = temp1 + (temp2 - temp1) * q_dex
                     temp1 = m_verts[4][vert.index][i] + \
-                        (m_verts[5][vert.index][i] - m_verts[4][vert.index][i]) * q_str
+                            (m_verts[5][vert.index][i] - m_verts[4][vert.index][i]) * q_str
                     temp2 = m_verts[6][vert.index][i] + \
-                        (m_verts[7][vert.index][i] - m_verts[6][vert.index][i]) * q_str
+                            (m_verts[7][vert.index][i] - m_verts[6][vert.index][i]) * q_str
                     value2 = temp1 + (temp2 - temp1) * q_dex
                     final = value1 + (value2 - value1) * q_height
                     vert.co[i] = final
@@ -1158,6 +1204,7 @@ def calculate_mesh(self, context):
                 final = value1 + (value2 - value1) * q_height
                 bpy.data.objects[t_pos].location[i] = final
 
+
 def auto_fix_scene():
     # switch to object mode first
     to_object_mode()
@@ -1173,7 +1220,7 @@ def auto_fix_scene():
         for sel in bpy.context.selected_objects:
             bpy.context.view_layer.objects.active = sel
             for modifier in sel.modifiers:
-                #if modifier.type == 'SUBSURF':
+                # if modifier.type == 'SUBSURF':
                 bpy.ops.object.modifier_apply(modifier=modifier.name)
                 # apply transformations
                 bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
@@ -1195,6 +1242,7 @@ def get_donor_acceptor(context: bpy.types.Context) -> [bpy.types.Object, bpy.typ
     donor = acceptors[0]
     return donor, acceptor
 
+
 def transform(object):
     # doesn't work
     current_matrix = object.matrix_world.copy()
@@ -1214,6 +1262,7 @@ def transform(object):
 
     # Reset the object’s transformations
     object.matrix_world = Matrix.Identity(4)
+
 
 def transform2(object):
     # doesn't work either
@@ -1254,13 +1303,13 @@ def animation_to_shapekey(context, donor, acceptor):
         new_key = acceptor.shape_key_add(name=str(frame), from_mix=False)
         new_key.data.foreach_set('co', frame_data)
 
-        #bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
+        # bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
         # for i, vertex in enumerate(donor_verts):
         #     new_key.data[i].co = vertex.co
         #     vertex: bmesh.types.BMVert
-            # new_key.data[i].co = donor.matrix_world @ vertex.co
+        # new_key.data[i].co = donor.matrix_world @ vertex.co
 
-        #bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
+        # bpy.ops.transform.transform(value=(donor.location.x,donor.location.y,donor.location.z, 1))
         insert_keyframe(new_key, frame)
 
 
@@ -1359,6 +1408,7 @@ def select_collection(coll_name, append_selection=False):
     for obj in coll.objects:
         obj.select_set(True)
 
+
 def copy_collection(copy_from_name, copy_to_name, name_prefix=None, replace=True):
     from_collection = bpy.data.collections.get(copy_from_name)
     # make new collection
@@ -1374,6 +1424,7 @@ def copy_collection(copy_from_name, copy_to_name, name_prefix=None, replace=True
 
     # store old-new object links
     prototypes = {}
+
     def copy_recursive(copy_from, copy_to, parent=None):
         for obj in copy_from:
             new_obj = obj.copy()
@@ -1393,6 +1444,7 @@ def copy_collection(copy_from_name, copy_to_name, name_prefix=None, replace=True
     copy_recursive(root_objects, to_collection)
     return to_collection, prototypes
 
+
 def create_morph_items(base_collection, morph_collection, morph_prefix, include_meshes=None):
     for obj in base_collection.objects:
         if obj.type != 'MESH':
@@ -1409,6 +1461,7 @@ def create_morph_items(base_collection, morph_collection, morph_prefix, include_
         new_obj.data = obj.data.copy()
         new_obj.data.name = new_obj.name
         morph_collection.objects.link(new_obj)
+
 
 @profile
 def create_all_morphs(context, include_meshes=None):
@@ -1461,7 +1514,7 @@ def create_all_morphs(context, include_meshes=None):
             bpy.data.objects[MODEL().morph_comp[s] + child].parent = bpy.data.objects[
                 MODEL().morph_comp[s] + parent]
 
-    #Трогаем только scaled коллекции
+    # Трогаем только scaled коллекции
     for s in range(1, 8):
         for child, parent in links.items():
             if parent is None:
@@ -1477,6 +1530,7 @@ def create_all_morphs(context, include_meshes=None):
             obj.select_set(True)
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
     bpy.ops.object.select_all(action='DESELECT')
+
 
 def report_info(message, title="Note", icon="INFO"):
     bpy.context.window_manager.popup_menu(lambda self, context: self.layout.label(text=message),
@@ -1565,7 +1619,7 @@ def bake_transform_animation(context):
         donor, acceptor = bake_make_acceptor(context, obj)
         pairs.append((donor, acceptor))
     # main run
-    for frame in range(frame_start, frame_end+1):
+    for frame in range(frame_start, frame_end + 1):
         context.scene.frame_set(frame)
         for donor, acceptor in pairs:
             bake_transform_animation_frame(context, donor, acceptor, frame)
@@ -1573,6 +1627,7 @@ def bake_transform_animation(context):
     for donor, acceptor in pairs:
         acceptor.name = donor.name
         bpy.data.objects.remove(donor, do_unlink=True)
+
 
 def bake_make_acceptor(context, donor):
     # for coll in bpy.data.collections["body"]:
@@ -1594,6 +1649,7 @@ def bake_make_acceptor(context, donor):
     acceptor.shape_key_add(name='basis', from_mix=False)
     return donor, acceptor
 
+
 def bake_transform_animation_frame(context, donor, acceptor, frame):
     frame_donor = donor.copy()
     frame_donor.data = donor.data.copy()
@@ -1613,6 +1669,7 @@ def bake_transform_animation_frame(context, donor, acceptor, frame):
     insert_keyframe(new_key, frame)
     bpy.data.objects.remove(frame_donor, do_unlink=True)
 
+
 @profile
 def export_animation(context, frame_range, animation_source_name, res_path):
     animation_name = context.scene.animation_name
@@ -1624,6 +1681,7 @@ def export_animation(context, frame_range, animation_source_name, res_path):
     abs2ei_rotations(links, animations)
 
     write_animations(animations, res_path, model_name, animation_name)
+
 
 def write_animations(animations, res_path, model_name, animation_name):
     # pack crrent animation first. byte array for each part (lh1, lh2, etc)

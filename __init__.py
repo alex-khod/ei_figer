@@ -13,6 +13,20 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import bpy
+import importlib
+from bpy.utils import register_class
+from bpy.utils import unregister_class
+
+from . import UI_panel
+from . import animation
+from . import figure
+from . import operators
+from . import scene_management
+# for reloading
+from . import scene_utils
+from .properties import register_props, unregister_props
+
 bl_info = {
     'name': 'EI figer',
     'author': 'Konstvest/LostSoul/Asbestos',
@@ -23,18 +37,6 @@ bl_info = {
     'wiki_url': '',
     'tracker_url': 'https://github.com/konstvest/ei_figer',
     'category': 'Import-Export'}
-import bpy
-from . import UI_panel
-from . import operators
-from . properties import register_props, unregister_props
-from bpy.utils import register_class
-from bpy.utils import unregister_class
-
-#for reloading
-from . import scene_utils
-from . import scene_management
-from . import animation
-from . import figure
 
 bl_panels = (
     UI_panel.IMPORT_EXPORT_PT_PANEL,
@@ -69,10 +71,10 @@ bl_menus = (
     (bpy.types.OUTLINER_MT_object, UI_panel.outliner_mt_object),
 )
 
+
 def add_context_menu(self, operator_class):
     self.layout.menu(operator_class.bl_idname)
 
-import importlib
 
 def reload_modules():
     importlib.reload(properties)
@@ -84,11 +86,12 @@ def reload_modules():
     importlib.reload(animation)
     importlib.reload(figure)
 
+
 def register():
     print("Register")
 
     for panel in bl_panels:
-        print ('reg panel: ' + str(panel))
+        print('reg panel: ' + str(panel))
         register_class(panel)
     for oper in bl_operators:
         print('reg operator: ' + str(oper))
@@ -97,7 +100,8 @@ def register():
         menu.append(menu_draw)
 
     register_props()
-    
+
+
 def unregister():
     reload_modules()
     for panel in bl_panels:
@@ -109,6 +113,7 @@ def unregister():
         menu.append(menu_draw)
 
     unregister_props()
+
 
 if __name__ == '__main__':
     register()

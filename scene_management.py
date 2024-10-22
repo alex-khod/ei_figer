@@ -13,10 +13,11 @@ import bpy
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from . links import CLink
-from . animation import CAnimation
-from . figure import CFigure
-from . bone import CBone
+from .links import CLink
+from .animation import CAnimation
+from .figure import CFigure
+from .bone import CBone
+
 
 class CAnimations():
     def __init__(self, anm_list):
@@ -53,7 +54,6 @@ class CAnimations():
 
 
 class CModel():
-
     morph_names = [
         'base',  # 0
         'str',  # 1
@@ -82,35 +82,35 @@ class CModel():
         self.name = ''
         self.morph_comp = {
             0: ''
-            ,1: 's~' #str
-            ,2: 'd~' #dex
-            ,3: 'u~' #unique
-            ,4: 'b~' #big (scaled basis)
-            ,5: 'p~' #power (scaled str)
-            ,6: 'g~' #growth (scaled dex)
-            ,7: 'c~' #common (scaled unique)
+            , 1: 's~'  # str
+            , 2: 'd~'  # dex
+            , 3: 'u~'  # unique
+            , 4: 'b~'  # big (scaled basis)
+            , 5: 'p~'  # power (scaled str)
+            , 6: 'g~'  # growth (scaled dex)
+            , 7: 'c~'  # common (scaled unique)
             # ,8: 'T~' #test unit
         }
 
         self.morph_collection = [
-            'base',             #0
-            'str',              #1
-            'dex',              #2
-            'unique',           #3
-            'base(scaled)',     #4
-            'str(scaled)',      #5
-            'dex(scaled)',      #6
-            'unique(scaled)',   #7
+            'base',  # 0
+            'str',  # 1
+            'dex',  # 2
+            'unique',  # 3
+            'base(scaled)',  # 4
+            'str(scaled)',  # 5
+            'dex(scaled)',  # 6
+            'unique(scaled)',  # 7
             # 'testUnit'          #8
         ]
 
         self.mesh_list: list[CFigure] = list()
-        self.pos_list : list[CBone] = list()
+        self.pos_list: list[CBone] = list()
 
-    def reset(self, type : str ='all'):
+    def reset(self, type: str = 'all'):
         if type == 'fig' or type == 'all':
             self.mesh_list: list[CFigure] = list()
-            self.pos_list : list[CBone] = list()
+            self.pos_list: list[CBone] = list()
 
     def is_morph_name(self, name: str):
         for morph in self.morph_comp.values():

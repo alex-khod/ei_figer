@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 from datetime import datetime
 
-from . helpers import read_exactly
+from .helpers import read_exactly
 
 _SIGNATURE = 0x019CE23C
 _HEADER_FORMAT = '<LLLL'
@@ -19,7 +19,6 @@ class InvalidResFile(Exception):
 
 @dataclass
 class ResFileItemInfo:
-
     name: str
     file_size: int
     file_offset: int
@@ -221,7 +220,7 @@ class ResFile:
         names_data = self._read(names_size)
         for table_entry in struct.iter_unpack(_TABLE_ENTRY_FORMAT, tables_data):
             _, file_size, file_offset, modify_timestamp, name_length, name_offset = table_entry
-            name = names_data[name_offset:name_offset+name_length].decode('cp1251')
+            name = names_data[name_offset:name_offset + name_length].decode('cp1251')
             self._table[self._lower_ascii(name)] = ResFileItemInfo(
                 name=name, file_size=file_size, file_offset=file_offset,
                 modify_time=datetime.fromtimestamp(modify_timestamp)

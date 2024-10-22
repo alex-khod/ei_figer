@@ -14,17 +14,19 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 from struct import pack, unpack
-from . utils import CByteReader
+from .utils import CByteReader
+
 
 class CBone(object):
     '''
     Bone positions for morphing components
     '''
+
     def __init__(self):
         self.name = ''
-        self.pos = [] #(0.0, 0.0, 0.0) for _ in range(8)
+        self.pos = []  # (0.0, 0.0, 0.0) for _ in range(8)
 
-    def read_bon(self, name, raw_data : bytearray):
+    def read_bon(self, name, raw_data: bytearray):
         self.name = name
         parser = CByteReader(raw_data)
         for _ in range(8):
@@ -36,7 +38,7 @@ class CBone(object):
         for _ in range(8):
             self.pos.append(vec)
         return 0
-    
+
     def write_bon(self):
         raw_data = b''
         for pos in self.pos:
@@ -50,7 +52,7 @@ class CBone(object):
         self.name = os.path.basename(path)
         with open(path, 'rb') as bon_file:
             btmp = [0, 0, 0]
-            for _ in range(8): #morphing components
+            for _ in range(8):  # morphing components
                 for orig in range(3):
                     btmp[orig] = unpack('f', bon_file.read(4))[0]
                 self.pos.append(tuple(btmp))
@@ -64,7 +66,7 @@ class CBone(object):
             for mrph_cmp in range(8):
                 for xyz in range(3):
                     bon_file.write(pack('f', self.pos[mrph_cmp][xyz]))
-    
+
     def fillPositions(self):
         for _ in range(1, 8):
             self.pos.append(self.pos[0])

@@ -17,6 +17,7 @@ import bpy
 from . import scene_utils
 from . import operators
 
+
 class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
     bl_label = 'import-export'
     bl_space_type = 'VIEW_3D'
@@ -67,19 +68,19 @@ class OPERATOR_PT_PANEL(bpy.types.Panel):
         row = layout.row()
         split = row.split(factor=0.35)
         left = split.column()
-        #morphing
+        # morphing
         row = layout.row()
         split = row.split(factor=1.2)
         left = split.column()
         row = layout.split()
-        #row.prop(context.scene, 'morph_comp')
+        # row.prop(context.scene, 'morph_comp')
         left.operator('object.addmorphcomp', text='Copy as')
         row = layout.split()
         left.operator('object.addmorphcompnamed', text='Copy as name')
         left = left.split(factor=0.5)
         left.prop(context.scene, 'figcopy_name')
-#        row = layout.split()
-#        left = split.column()
+        #        row = layout.split()
+        #        left = split.column()
         left.prop(context.scene, 'figcopy_parent')
         layout.operator('object.rename_drop_postfix', text='Drop .001 name part')
         row = layout.split()
@@ -101,7 +102,6 @@ class OPERATOR_PT_PANEL(bpy.types.Panel):
         split.prop(context.scene, 'morph6')
         split = row.split(factor=5.0)
         split.prop(context.scene, 'morph7')
-        
 
 
 class OPERATORMASS_PT_PANEL(bpy.types.Panel):
@@ -119,29 +119,29 @@ class OPERATORMASS_PT_PANEL(bpy.types.Panel):
 
         row = layout.row()
         split = row.split(factor=1.35)
-        #row.label(text='S')
+        # row.label(text='S')
         row.prop(context.scene, 's_s_x')
         row.prop(context.scene, 's_s_y')
         row.prop(context.scene, 's_s_z')
 
         row = layout.row()
         split = row.split(factor=1.35)
-        #row.label(text='D')
+        # row.label(text='D')
         row.prop(context.scene, 's_d_x')
         row.prop(context.scene, 's_d_y')
         row.prop(context.scene, 's_d_z')
 
         row = layout.row()
         split = row.split(factor=1.35)
-        #row.label(text='U')
+        # row.label(text='U')
         row.prop(context.scene, 's_u_x')
         row.prop(context.scene, 's_u_y')
         row.prop(context.scene, 's_u_z')
 
         layout = self.layout
-        #layout.label(text='Animations')
+        # layout.label(text='Animations')
         layout.prop(context.scene, 'scaled')
-        
+
         row = layout.split()
         split = row.split(factor=1.2)
         split.prop(context.scene, 'auto_apply')
@@ -170,7 +170,7 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        #layout.label(text='Animations')
+        # layout.label(text='Animations')
         layout.prop(context.scene, 'animation_name')
 
         layout.prop(context.scene, 'animsubfix')
@@ -183,8 +183,8 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         layout.operator('object.animation_export', text=label).target_collection = use_collection
 
         donor, acceptor = scene_utils.get_donor_acceptor(context)
-        layout.label(text=f"FROM: {donor.name if donor else None }")
-        layout.label(text=f"DEST: {acceptor.name if acceptor else None }")
+        layout.label(text=f"FROM: {donor.name if donor else None}")
+        layout.label(text=f"DEST: {acceptor.name if acceptor else None}")
         layout.operator('object.animation_shapekey', text='Shapekey')
         # layout.prop(context.scene, 'skeletal')
         layout.operator('object.animation_bake_transform', text='Bake transform')
@@ -192,7 +192,7 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         # layout.operator('object.debug_test')
 
 
-def outliner_mt_collection(self : bpy.types.OUTLINER_MT_collection, context):
+def outliner_mt_collection(self: bpy.types.OUTLINER_MT_collection, context):
     layout = self.layout
     layout.separator()
     active_collection = context.view_layer.active_layer_collection
@@ -220,7 +220,7 @@ def prepare_mesh_mask(context) -> str or None:
     return mesh_mask
 
 
-def outliner_mt_object(self : bpy.types.OUTLINER_MT_object, context):
+def outliner_mt_object(self: bpy.types.OUTLINER_MT_object, context):
     layout = self.layout
     mesh_mask = prepare_mesh_mask(context)
 
@@ -234,4 +234,3 @@ def outliner_mt_object(self : bpy.types.OUTLINER_MT_object, context):
     layout.operator('object.model_export', text=label).mesh_mask = mesh_mask
     label = operators.CAutoFillMorphNew_OP_Operator.get_name(mesh_mask)
     layout.operator('object.automorphnew', text=label).mesh_mask = mesh_mask
-

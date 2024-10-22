@@ -13,50 +13,50 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from struct import pack, unpack
-from . utils import CByteReader
+from .utils import CByteReader
+
 
 class CLink():
     def __init__(self):
         self.root = ''
         self.links = dict()
 
-    def read_lnk(self, raw_data : bytearray):
+    def read_lnk(self, raw_data: bytearray):
         parser = CByteReader(raw_data)
         link_number = parser.read('i')
         for _ in range(link_number):
             part_len = parser.read('i')
-            part = parser.read(part_len*'s').decode().rstrip('\x00')
+            part = parser.read(part_len * 's').decode().rstrip('\x00')
             part_len = parser.read('i')
             if part_len == 0:
                 self.links[part] = None
                 self.root = part
             else:
-                parent = parser.read(part_len*'s').decode().rstrip('\x00')
+                parent = parser.read(part_len * 's').decode().rstrip('\x00')
                 self.links[part] = parent
         if parser.is_EOF():
-            #print('EOF reached')
+            # print('EOF reached')
             return 0
         return 1
-        
 
     def write_lnk(self):
         raw_data = b''
-        #root
+        # root
         raw_data += pack('i', len(self.links.keys()))
         data = self.root.encode() + b'\x00'
         raw_data += pack('i', len(data))
-        raw_data += pack(str(len(data))+'s', data)
-        #add empty parent for root
+        raw_data += pack(str(len(data)) + 's', data)
+        # add empty parent for root
         raw_data += pack('i', 0)
         for key, value in self.links.items():
             if value is None:
-                continue #root
+                continue  # root
             data = key.encode() + b'\x00'
             raw_data += pack('i', len(data))
-            raw_data += pack(str(len(data))+'s', data)
+            raw_data += pack(str(len(data)) + 's', data)
             data = value.encode() + b'\x00'
             raw_data += pack('i', len(data))
-            raw_data += pack(str(len(data))+'s', data)
+            raw_data += pack(str(len(data)) + 's', data)
 
         return raw_data
 
@@ -96,7 +96,7 @@ class CLink():
             lnk_file.write(pack(str_format, self.root.encode()))
             lnk_file.write(pack('i', 0))
 
-            #write parts
+            # write parts
             for key, value in self.links.items():
                 if key == self.root:
                     continue

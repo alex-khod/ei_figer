@@ -17,62 +17,64 @@ import bpy
 import numpy as np
 from struct import pack, unpack
 from mathutils import Quaternion
-from . utils import read_xyzw, write_xyzw, read_xyz, write_xyz, CByteReader
+from .utils import read_xyzw, write_xyzw, read_xyz, write_xyz, CByteReader
+
 
 class CAnimation(object):
     '''
     container of EI figure animation frames
     '''
+
     def __init__(self):
         self.name = ''
-        self.rotations = [] # rotation in w,x,y,z for each frame
-        self.abs_rotation : list[Quaternion] = []
+        self.rotations = []  # rotation in w,x,y,z for each frame
+        self.abs_rotation: list[Quaternion] = []
         self.translations = []
         self.morphations = []
-        self.something = [] #масштаб?
+        self.something = []  # масштаб?
         self.frameinfo = []
 
     def __repr__(self):
-        #return f"CAnimation: name={self.name} at {id(self)}"
+        # return f"CAnimation: name={self.name} at {id(self)}"
         return f"CAnimation: name={self.name}"
 
-    def read_anm(self, name, raw_data : bytearray):
+    def read_anm(self, name, raw_data: bytearray):
         """
         Reads animation data from byte array (from .res file)
         """
         self.name = name
         parser = CByteReader(raw_data)
 
-        #rotations
+        # rotations
         rot_count = parser.read('L')
         for _ in range(rot_count):
             self.rotations.append(Quaternion(parser.read('ffff')))
-        
-        #translations
+
+        # translations
         trans_count = parser.read('L')
         for _ in range(trans_count):
-            self.translations.append(parser.read('fff')) #ddd для ether2
-        
+            self.translations.append(parser.read('fff'))  # ddd для ether2
+
         bEtherlord = bpy.context.scene.ether
         if bEtherlord:
-        #scalings?
+            # scalings?
             something_frame_count = parser.read('L')
-            #print('name = ' + name)
-            #print('something_frame_count = ' + str(something_frame_count))           
+            # print('name = ' + name)
+            # print('something_frame_count = ' + str(something_frame_count))
             for _ in range(something_frame_count):
                 something = self.something.append(parser.read('fff'))
-                #print('something = ' + str(something))
+                # print('something = ' + str(something))
 
         morph_frame_count = parser.read('L')
         morph_vert_count = parser.read('L')
         if parser.is_EOF():
-            #print('EOF reached')
+            # print('EOF reached')
             return 0
 
         morphanim_data = parser.read('%df' % (morph_frame_count * morph_vert_count * 3))
         self.morphations = np.array(morphanim_data).reshape((morph_frame_count, morph_vert_count, 3))
         if parser.is_EOF():
-            #print('EOF reached')
+            # print('EOF reached')
             return 0
         return 1
 
@@ -81,7 +83,7 @@ class CAnimation(object):
         raw_data += pack('L', len(self.rotations))
         for rot in self.rotations:
             raw_data += pack('%uf' % len(rot), *rot)
-        #translations
+        # translations
         raw_data += pack('L', len(self.translations))
         for trans in self.translations:
             raw_data += pack('%uf' % len(trans), *trans)
@@ -92,7 +94,7 @@ class CAnimation(object):
         raw_data += pack('L', n_vertices_per_frame)
 
         for frame in self.morphations:
-            assert(len(frame) == n_vertices_per_frame)
+            assert (len(frame) == n_vertices_per_frame)
             raw_data += frame.tobytes()
 
         return raw_data

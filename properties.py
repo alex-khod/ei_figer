@@ -13,8 +13,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import bpy
-from . scene_utils import calculate_mesh
-from . scene_management import CModel
+from .scene_utils import calculate_mesh
+from .scene_management import CModel
+
 
 def register_props():
     scene = bpy.types.Scene
@@ -37,7 +38,7 @@ def register_props():
             default='figures.res',
             description='*.res file containing models, figures, animations. Usually Figures.res'
         )
-        setattr(scene, "res_file_buffer%d" % i,  prop)
+        setattr(scene, "res_file_buffer%d" % i, prop)
 
     scene.figmodel_name = bpy.props.StringProperty(
         name='Name',
@@ -50,14 +51,14 @@ def register_props():
         default='',
         description='Write Animation Name for Import/Export Model/Figure animation'
     )
-    
+
     scene.scaled = bpy.props.FloatProperty(
         name='scaled',
         default=3.0,
         step=10,
         description='Scale of scaled morph'
     )
-    
+
     scene.s_s_x = bpy.props.FloatProperty(
         name='Sx',
         default=1.0,
@@ -125,9 +126,9 @@ def register_props():
             ('p~', 'str(scaled) (p~)', 'Scaled strength component', 5),
             ('g~', 'dex(scaled) (g~)', 'Scaled dexterity component', 6),
             ('c~', 'unique(scaled) (c~)', 'Scaled Unique component', 7)
-        ], 
-        name='', 
-        description='Select morphing component to copy', 
+        ],
+        name='',
+        description='Select morphing component to copy',
         default='s~'
     )
 
@@ -263,6 +264,7 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
         default=True
     )
     scene.model = CModel()
+
 
 def unregister_props():
     scene = bpy.types.Scene

@@ -18,35 +18,37 @@ from . import utils as fig_utils
 
 import numpy as np
 
+
 class CFigure(object):
     '''
     3D model with morphing components
     '''
+
     def __init__(self):
         self.name = ''
-# header:
-# vertex_count
-# normal_count
-# texcoord_count
-# index_count
-# vertex_component_count
-# morph_component_count
-# unknown
-# group
-# texture_number
+        # header:
+        # vertex_count
+        # normal_count
+        # texcoord_count
+        # index_count
+        # vertex_component_count
+        # morph_component_count
+        # unknown
+        # group
+        # texture_number
         self.header = [0 for _ in range(9)]
-        self.center = [] #(0.0, 0.0, 0.0) for _ in range(8)
-        self.fmin = [] #(0.0, 0.0, 0.0) for _ in range(8)
-        self.fmax = [] #(0.0, 0.0, 0.0) for _ in range(8)
-        self.radius = [] #0.0 for _ in range(8)
+        self.center = []  # (0.0, 0.0, 0.0) for _ in range(8)
+        self.fmin = []  # (0.0, 0.0, 0.0) for _ in range(8)
+        self.fmax = []  # (0.0, 0.0, 0.0) for _ in range(8)
+        self.radius = []  # 0.0 for _ in range(8)
         # [main], [strength], [dexterity], [unique] and scaled once
         self.verts = [[], [], [], [], [], [], [], []]
         self.normals = []
-        #texture coordinates
+        # texture coordinates
         self.t_coords = []
-        #indicies
+        # indicies
         self.indicies = []
-        #vertex components
+        # vertex components
         self.v_c = []
         self.m_c = []
         self.morph_count = 8
@@ -61,13 +63,13 @@ class CFigure(object):
         is_equal = self.header == other.header and self.center == other.center and self.fmin == other.fmin
         is_equal = is_equal and self.fmax == other.fmax and self.radius == other.radius
         is_equal = is_equal and self.indicies == other.indicies and self.v_c == other.v_c
-        #TODO: set precision for compare points
+        # TODO: set precision for compare points
         is_equal = is_equal and self.verts == other.verts and self.normals == other.normals
         is_equal = is_equal and self.t_coords == other.t_coords
 
         return is_equal
 
-    def read_fig(self, name, raw_data : bytearray):
+    def read_fig(self, name, raw_data: bytearray):
         self.name = name
         parser = fig_utils.CByteReader(raw_data)
         print('Name: ' + name)
@@ -81,29 +83,29 @@ class CFigure(object):
             self.morph_count = 6
         elif signature == 'FIG4':
             self.morph_count = 4
-        else:    
+        else:
             self.morph_count = 1
 
         print(self.name + ' have morph_count is ' + str(self.morph_count))
 
         for i in range(9):
             self.header[i] = parser.read('L')
-#            print('self.header[i] is ' + str(self.header[i]))
+        #            print('self.header[i] is ' + str(self.header[i]))
         # Center
         for _ in range(self.morph_count):
-            Center = self.center.append(parser.read('fff'))
+            self.center.append(parser.read('fff'))
         # MIN
         for _ in range(self.morph_count):
             self.fmin.append(parser.read('fff'))
-#        print('self.fmin is ' + str(self.fmin))
+        #        print('self.fmin is ' + str(self.fmin))
         # MAX
         for _ in range(self.morph_count):
             self.fmax.append(parser.read('fff'))
-#        print('self.fmax is ' + str(self.fmax))
+        #        print('self.fmax is ' + str(self.fmax))
         # Radius
         for _ in range(self.morph_count):
             self.radius.append(parser.read('f'))
-#        print('self.radius is ' + str(self.radius))
+        #        print('self.radius is ' + str(self.radius))
         # VERTICES
         print(self.header)
         n_vertex_blocks = self.header[0]
@@ -132,8 +134,8 @@ class CFigure(object):
         packed_uvs = fig_utils.unpack_uv_np(texcoords, convert_count, uv_base)
         self.t_coords = packed_uvs
         # INDICES
-        n_indicies = self.header[3]
-        self.indicies = np.array(parser.read('%uH' % n_indicies))
+        n_indices = self.header[3]
+        self.indicies = np.array(parser.read('%uH' % n_indices))
         # VERTEX COMPONENTS
         n_components = self.header[4]
         self.v_c = np.array(parser.read('%uH' % (n_components * 3))).reshape((n_components, 3))
@@ -148,7 +150,7 @@ class CFigure(object):
         return 1
 
     def write_fig(self):
-        if len(self.normals) != self.header[1]*4: #normal count * block_size(4)
+        if len(self.normals) != self.header[1] * 4:  # normal count * block_size(4)
             print('normals count corrupted')
         if len(self.t_coords) != self.header[2]:
             print('texture coordinates count corrupted')
@@ -162,7 +164,7 @@ class CFigure(object):
         pack = struct.pack
         raw_data = pack('4s', b'FIG8')
         # header
-        assert(len(self.header) == 9)
+        assert (len(self.header) == 9)
         raw_data += pack('9L', *self.header)
         # center
         for v_c in self.center:
@@ -205,18 +207,17 @@ class CFigure(object):
         # morph_components = [co for m_c in self.m_c for co in m_c]
         # raw_data += pack('%sh' % len(morph_components), *morph_components)
         return raw_data
-    
-    def fillVertices(self):
+
+    def fill_vertices(self):
         for i in range(1, 8):
             self.verts[i] = self.verts[0]
 
-    def fillAux(self):
+    def fill_aux(self):
         for i in range(1, 8):
             self.fmin.append(self.fmin[0])
             self.fmax.append(self.fmax[0])
             self.center.append(self.center[0])
             self.radius.append(self.radius[0])
-
 
     def generate_m_c(self):
         n_morph_components = self.header[5]
