@@ -29,6 +29,7 @@ from .utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVec
 from . import utils as fig_utils
 from .bone import CBone
 from . import figure
+from . import resfile
 
 CFigure = figure.CFigure
 from .resfile import ResFile
@@ -1755,6 +1756,7 @@ def euler_to_quaternion(x, y, z):
     quaternion = euler.to_quaternion()
     return quaternion
 
+
 def get_euler_frames(action: bpy.types.Action):
     x_curve = action.fcurves.find('rotation_euler', index=0)
     y_curve = action.fcurves.find('rotation_euler', index=1)
@@ -1784,6 +1786,7 @@ def animation_from_quaternions(obj, frames, quaternions):
         # obj.keyframe_insert(data_path="rotation_quaternion", frame=frame, index=1, value=q[1])
         # obj.keyframe_insert(data_path="rotation_quaternion", frame=frame, index=2, value=q[2])
         # obj.keyframe_insert(data_path="rotation_quaternion", frame=frame, index=3, value=q[3])
+
 
 def remove_scale_furve(obj):
     action = obj.animation_data.action
@@ -1826,3 +1829,12 @@ def ue4_toolchain_(operator, context, root, armature, mesh):
     operator.report({"INFO"}, "Convert euler animation to quaternion")
     remove_scale_furve(new_mesh)
     operator.report({"INFO"}, "Clear scale animation")
+
+
+def repack_resfile(path):
+    importlib.reload(resfile)
+    with ResFile(path, 'r') as res:
+        data = res.get_valid_data(recursive=True)
+
+    with open(path, "wb") as f:
+        f.write(data)

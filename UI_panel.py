@@ -51,6 +51,7 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
         layout.operator('object.model_export', text=op_name).mesh_mask = mesh_mask
         row = layout.row()
         row.operator('object.clear_scene', text='Clear scene')
+        row.operator('object.repack_resfile')
 
 
 class OPERATOR_PT_PANEL(bpy.types.Panel):

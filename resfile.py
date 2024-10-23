@@ -3,6 +3,7 @@ import io
 import struct
 from dataclasses import dataclass
 from datetime import datetime
+from typing import List
 
 from .helpers import read_exactly
 
@@ -131,6 +132,12 @@ class ResFile:
         if self._mode in ('r', 'a'):
             self._read_headers()
 
+    @classmethod
+    def is_res_file(cls, bytes_):
+        sigbytes = bytes_[:4]
+        sig = struct.unpack('L', sigbytes)[0]
+        return sig == _SIGNATURE
+
     def __enter__(self):
         return self
 
@@ -204,13 +211,13 @@ class ResFile:
         return ''.join((c.lower() if ord(c) >= 128 else c) for c in value)
 
     def _read_headers(self):
-        self._file.seek(0, 2)
-        res_file_size = self._file.tell()
         self._file.seek(0)
         header_data = self._read(_HEADER_SIZE, 'File header is truncated')
         magic, table_size, table_offset, names_size = struct.unpack(_HEADER_FORMAT, header_data)
         if magic != _SIGNATURE:
             raise InvalidResFile('Invalid signature')
+        self._file.seek(0, 2)
+        res_file_size = self._file.tell()
         table_data_size = table_size * _TABLE_ENTRY_SiZE
         if table_offset + table_data_size + names_size > res_file_size:
             raise InvalidResFile('Files table is truncated')
@@ -280,5 +287,30 @@ class ResFile:
         data = struct.pack(_HEADER_FORMAT, _SIGNATURE, len(hash_table), table_offset, name_offset)
         self._file.write(data)
 
-    def get_filename_list(self):
-        return tuple(self._table.keys())
+    def get_filename_list(self) -> List[str]:
+        return list(self._table.keys())
+
+    def get_valid_data(self, recursive=True):
+        # reread all res file entries and return them bytes
+        datas = []
+        fnames = self.get_filename_list()
+        fnames.sort()
+        for fname in fnames:
+            with self.open(fname, 'r') as f:
+                data = f.read()
+            if ResFile.is_res_file(data):
+                print("adding resfile", fname)
+                if recursive:
+                    buffer = io.BytesIO(data)
+                    with ResFile(buffer, "r") as internal_res:
+                        data = internal_res.get_valid_data(recursive)
+            else:
+                print("adding file", fname)
+            datas.append((fname, data))
+
+        output = io.BytesIO()
+        with ResFile(output, 'w') as res:
+            for fname, data in datas:
+                with res.open(fname, "w") as f:
+                    f.write(data)
+        return output.getvalue()

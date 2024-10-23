@@ -65,6 +65,7 @@ bl_operators = (
     operators.CRenameDropPostfix_OP_operator,
     operators.CAnimation_OP_UE4_Toolchain,
     operators.CDebugTestOperator,
+    operators.CRepackResFile,
 )
 
 bl_menus = (

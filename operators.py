@@ -651,6 +651,18 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class CRepackResFile(bpy.types.Operator):
+    bl_label = 'Repack'
+    bl_idname = 'object.repack_resfile'
+    bl_description = 'Recursively repack .res archive, reducing file size'
+
+    def execute(self, context):
+        res_file = context.scene.res_file
+        reload_modules()
+        scene_utils.repack_resfile(res_file)
+        return {'FINISHED'}
+
+
 class CSelectResFileIndex(bpy.types.Operator):
     bl_label = 'Select Resfile'
     bl_idname = 'object.select_resfile'
@@ -945,6 +957,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
+
 
 class CAnimation_OP_UE4_Toolchain(bpy.types.Operator):
     bl_label = 'UE4 to EI'
