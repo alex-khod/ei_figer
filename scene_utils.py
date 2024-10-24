@@ -275,7 +275,6 @@ def create_model_meshes(links: CLink, include_meshes=None):
         set_pos_2(bone, morph_count)
 
 
-@profile
 def import_model(context, res_file, model_name, include_meshes: Set[str] = None):
     if (model_name + '.mod') in res_file.get_filename_list():
         import_mod_file(res_file, model_name, include_meshes)
@@ -301,7 +300,6 @@ def get_base_members_without_morphs():
     return without_morphs
 
 
-@profile
 def export_model(context, res_path, model_name, include_meshes=None):
     links = collect_links()
 
@@ -529,7 +527,6 @@ def tris_mesh_from_pydata(mesh: bpy.types.Mesh, vertices: np.array, triangles: n
     #     )
 
 
-# @profile
 def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     # create mesh, replacing old in collection or renaming same-named mesh elsewhere
     active_model: CModel = bpy.context.scene.model
@@ -648,18 +645,18 @@ def insert_animation(to_collection: str, anm_list: CAnimations):
         bpy.context.scene.frame_end = len(part.rotations) - 1  # for example, 43 frames from 0 to 42
         for frame in range(len(part.rotations)):
             # rotations
-            bpy.context.scene.frame_set(frame)  # choose frame
+            # bpy.context.scene.frame_set(frame)  # choose frame
             obj.rotation_quaternion = part.rotations[frame]
-            obj.keyframe_insert(data_path='rotation_quaternion', index=-1)
+            obj.keyframe_insert(data_path='rotation_quaternion', frame=frame, index=-1)
             # positions
             bEtherlord = bpy.context.scene.ether
             if not bEtherlord:
                 if obj.parent is None:  # root
                     obj.location = part.translations[frame]
-                    obj.keyframe_insert(data_path='location', index=-1)
+                    obj.keyframe_insert(data_path='location', frame=frame, index=-1)
             else:
                 obj.location = part.translations[frame]
-                obj.keyframe_insert(data_path='location', index=-1)
+                obj.keyframe_insert(data_path='location', frame=frame, index=-1)
 
         # morphations
         if len(part.morphations) > 0:
@@ -673,7 +670,7 @@ def insert_animation(to_collection: str, anm_list: CAnimations):
                 key = obj.shape_key_add(name=str(frame), from_mix=False)
 
                 frame_data = vertices_data + part.morphations[frame]
-                n_frame_verties = len(frame_data)
+                n_frame_vertices = len(frame_data)
                 key.data.foreach_set('co', frame_data.flatten())
                 insert_keyframe(key, frame)
     return True
@@ -1474,7 +1471,6 @@ def create_morph_items(base_collection, morph_collection, morph_prefix, include_
         morph_collection.objects.link(new_obj)
 
 
-@profile
 def create_all_morphs(context, include_meshes=None):
     # Триангулируем и применяем модификаторы на базовой модели
     bAutofix = context.scene.auto_apply
@@ -1681,7 +1677,6 @@ def bake_transform_animation_frame(context, donor, acceptor, frame):
     bpy.data.objects.remove(frame_donor, do_unlink=True)
 
 
-@profile
 def export_animation(context, frame_range, animation_source_name, res_path):
     animation_name = context.scene.animation_name
     model_name = context.scene.figmodel_name
