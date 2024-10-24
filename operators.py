@@ -949,9 +949,9 @@ class CAnimation_OP_Export(bpy.types.Operator):
         is_use_mesh_frame_range = context.scene.is_use_mesh_frame_range
         self.report({'INFO'}, f'Use mesh frame range: {is_use_mesh_frame_range}')
         if is_use_mesh_frame_range:
-            frame_range = context.scene.frame_start, context.scene.frame_end
-        else:
             frame_range = scene_utils.get_collection_frame_range(animation_source_name)
+        else:
+            frame_range = context.scene.frame_start, context.scene.frame_end
 
         self.report({'INFO'}, f'Exporting frames from {frame_range[0]} to {frame_range[1]}')
         _, duration = get_duration(lambda: scene_utils.export_animation(context, frame_range, animation_source_name,

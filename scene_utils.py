@@ -697,6 +697,9 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
     # print(base_data_2 == basis_data)
     # breakpoint()
 
+    # base_collection = get_collection("base")
+    # obj.data.vertices.foreach_get('co', base_data)
+
     for obj in coll.objects:
         if obj.name[0:2] in bpy.types.Scene.model.morph_comp.values():
             continue  # skip morphed objects
@@ -704,10 +707,16 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
         if obj.animation_data is None and (not obj.data.shape_keys):
             continue
 
+        # base_obj = base_collection.get(obj.name)
+        # base_obj = base_collection.objects[0]
+        # n_vertices = len(base_obj.data.vertices)
+        # base_verts = np.zeros(n_vertices * 3, np.float32)
+        # base_obj.data.vertices.foreach_get('co', base_verts)
+        # base_verts = base_verts.reshape((n_vertices, 3))
+
         anm = CAnimation()
         anm.name = obj.name
         obj.rotation_mode = 'QUATERNION'
-
         frame_start, frame_end = frame_range
 
         basis_block = None
@@ -1293,13 +1302,29 @@ def transform2(object):
     object.scale = (1.0, 1.0, 1.0)
 
 
+def get_frame_range(context, obj):
+    is_use_mesh_frame_range = context.scene.is_use_mesh_frame_range
+    report_info(f'Use mesh frame range: {is_use_mesh_frame_range}')
+    if is_use_mesh_frame_range:
+        # TODO: try multiple objects?
+        frame_range = get_object_frame_range(obj)
+        while frame_range is None and obj.parent is not None:
+            frame_range = get_object_frame_range(obj.parent)
+    else:
+        frame_range = context.scene.frame_start, context.scene.frame_end
+    return frame_range
+
+
 def animation_to_shapekey(context, donor, acceptor):
     acceptor.shape_key_clear()
     acceptor.shape_key_add(name='basis', from_mix=False)
     depgraph = context.evaluated_depsgraph_get()
     n_vertex = len(donor.data.vertices)
+
+    frame_range = get_frame_range(context, donor)
+    frame_start, frame_end = frame_range
     # frame_data = np.zeros((n_vertex * 3), np.float32)
-    for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
+    for frame in range(frame_start, frame_end + 1):
         context.scene.frame_set(frame)
         # animate vertices
         donor_bm = bmesh.new()
@@ -1690,7 +1715,7 @@ def export_animation(context, frame_range, animation_source_name, res_path):
 
 
 def write_animations(animations, res_path, model_name, animation_name):
-    # pack crrent animation first. byte array for each part (lh1, lh2, etc)
+    # pack current animation first. byte array for each part (lh1, lh2, etc)
     anm_res = io.BytesIO()
     with ResFile(anm_res, 'w') as res:
         for part in animations:
@@ -1767,6 +1792,7 @@ def get_euler_frames(action: bpy.types.Action):
     y_curve = action.fcurves.find('rotation_euler', index=1)
     z_curve = action.fcurves.find('rotation_euler', index=2)
 
+    if not x_curve: return [], []
     keyframe_points = x_curve.keyframe_points
 
     frames = []
@@ -1823,6 +1849,7 @@ def ue4_toolchain_(operator, context, root, armature, mesh):
     operator.report({"INFO"}, "Copy and unparent mesh")
     new_mesh.modifiers.clear()
     operator.report({"INFO"}, "Clear modifiers on new object")
+
     new_mesh.animation_data_clear()
     new_mesh.animation_data_create()
     action = armature.animation_data.action.copy()
@@ -1832,6 +1859,14 @@ def ue4_toolchain_(operator, context, root, armature, mesh):
     operator.report({"INFO"}, "Shapekeying animation from old mesh to new mesh")
     animation_euler_to_quaternions(new_mesh)
     operator.report({"INFO"}, "Convert euler animation to quaternion")
+    # transfer transform
+    new_mesh.scale = armature.scale
+    new_mesh.location = armature.location
+    if armature.rotation_mode == "XYZ":
+        new_rot_q = euler_to_quaternion(*armature.rotation_euler)
+    else:
+        new_rot_q = armature.rotation_quaternion
+    new_mesh.rotation_quaternion = new_rot_q
     remove_scale_furve(new_mesh)
     operator.report({"INFO"}, "Clear scale animation")
 
