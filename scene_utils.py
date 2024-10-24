@@ -90,7 +90,17 @@ def rename_serial(old_obj, name):
 
 def rename_drop_postfix(objects):
     for obj in objects:
-        name = obj.name.rsplit('.')[0]
+        split = obj.name.rsplit('.', 1)
+        if len(split) == 1:
+            continue
+
+        name, postfix = split
+        digits = '0123456789'
+
+        all_in_digits = [c in digits for c in postfix]
+        all_digits = sum(all_in_digits) == len(postfix)
+        if not all_digits:
+            continue
 
         if name in bpy.data.objects:
             rename_serial(bpy.data.objects.get(name), name)
