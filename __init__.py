@@ -18,13 +18,18 @@ import importlib
 from bpy.utils import register_class
 from bpy.utils import unregister_class
 
+from .locales import ru_ru
+from .locales import en_US
+
 from . import UI_panel
 from . import animation
 from . import figure
 from . import operators
 from . import scene_management
+from . import resfile
 # for reloading
 from . import scene_utils
+from . import properties
 from .properties import register_props, unregister_props
 
 bl_info = {
@@ -35,7 +40,7 @@ bl_info = {
     'location': '',
     'description': 'Addon for import/export models and animations from Evil Islands game to Blender',
     'wiki_url': '',
-    'tracker_url': 'https://github.com/konstvest/ei_figer',
+    'tracker_url': 'https://github.com/alex-khod/ei_figer',
     'category': 'Import-Export'}
 
 bl_panels = (
@@ -87,6 +92,14 @@ def reload_modules():
     importlib.reload(scene_management)
     importlib.reload(animation)
     importlib.reload(figure)
+    importlib.reload(resfile)
+
+    importlib.reload(ru_ru)
+    importlib.reload(en_US)
+
+
+if "bpy" in locals():
+    reload_modules()
 
 
 def register():
@@ -103,9 +116,16 @@ def register():
 
     register_props()
 
+    print("LOCALE", bpy.app.translations.locale)
+
+    translation_dict = {ru_ru.locale: ru_ru.translation}
+    translation_dict.update({en_US.locale: en_US.translation})
+    bpy.app.translations.register(__name__, translation_dict)
+
 
 def unregister():
-    reload_modules()
+    print("Unregister")
+
     for panel in bl_panels:
         unregister_class(panel)
     for oper in bl_operators:
@@ -115,6 +135,10 @@ def unregister():
         menu.append(menu_draw)
 
     unregister_props()
+
+    reload_modules()
+
+    bpy.app.translations.unregister(__name__)
 
 
 if __name__ == '__main__':

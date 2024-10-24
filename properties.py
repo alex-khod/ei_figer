@@ -15,6 +15,9 @@
 import bpy
 from .scene_utils import calculate_mesh
 from .scene_management import CModel
+from bpy.app import translations
+
+_ = translations.pgettext
 
 
 def register_props():
@@ -27,29 +30,40 @@ def register_props():
     )
 
     scene.res_file = bpy.props.StringProperty(
-        name='Current Res',
+        name='Current RES',
         default='?.res',
-        description='*.res file containing models, figures, animations. Usually Figures.res'
+        description=('*.res file containing models, figures, animations, usually figures.res.\n'
+                     ' Click [...] then [ ✓ ] to select.')
     )
 
     for i in range(0, 3):
         prop = bpy.props.StringProperty(
             name='Res %d' % (i + 1),
             default='figures.res',
-            description='*.res file containing models, figures, animations. Usually Figures.res'
+            description=('*.res file containing models, figures, animations, usually figures.res.\n'
+                         ' Click [...] then [ ✓ ] to select.')
         )
         setattr(scene, "res_file_buffer%d" % i, prop)
 
     scene.figmodel_name = bpy.props.StringProperty(
         name='Name',
         default='',
-        description='Write Model/Figure name to Import/Export'
+        description='Model name to import/export, e.g. "unmodg".\n'
+                    'Leave empty and hit "import" to get list of importable models for current RES'
+    )
+
+    scene.mesh_mask = bpy.props.StringProperty(
+        name='Mesh mask',
+        default="",
+        description="Comma-delimited mesh names for for partial import/export of a model.\n"
+                    "NOTE: RMB base collection objects to specifically import/export them"
     )
 
     scene.animation_name = bpy.props.StringProperty(
         name='Name',
         default='',
-        description='Write Animation Name for Import/Export Model/Figure animation'
+        description=('Animation name for import/export model/figure animation.\n'
+                    'Leave empty to list existing animations in RES')
     )
 
     scene.scaled = bpy.props.FloatProperty(
@@ -143,15 +157,6 @@ def register_props():
         description='Parent of figure you want to copy'
     )
 
-    scene.mesh_mask = bpy.props.StringProperty(
-        name='Mesh mask',
-        default="",
-        description="Partial import/export of a model. Needs full base collection to be present in a scene.\n"
-                    "Fill as comma-separated include list of meshes (include all meshes if empty).\n"
-                    "Example: `head, body`\n"
-                    "NOTE: More handily, use object RMB context menu in outliner (base collection only!)"
-    )
-
     scene.mesh_str = bpy.props.FloatProperty(
         name='str',
         default=0.5,
@@ -243,7 +248,7 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
     scene.is_animation_to_new_collection = bpy.props.BoolProperty(
         name='as new collection',
         description='Unchecked: import into base collection\n'
-                    'Checked: import into copy of base collection named as animation',
+                    'Checked: import into new copy of base collection named as animation',
         default=False
     )
     scene.is_export_unique = bpy.props.BoolProperty(
@@ -259,7 +264,7 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
     scene.is_use_mesh_frame_range = bpy.props.BoolProperty(
         name='use mesh frame range',
         description='For shapekey/export operations frame range (start, end)\n'
-                    'Checked: uses mesh animation frame range\n'
+                    'Checked: tries to calculate frame range from mesh animation\n'
                     'Unchecked: uses scene frame range',
         default=True
     )

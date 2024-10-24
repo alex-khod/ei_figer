@@ -1,5 +1,6 @@
 import copy
 import io
+import os.path
 import struct
 from dataclasses import dataclass
 from datetime import datetime
@@ -289,6 +290,20 @@ class ResFile:
 
     def get_filename_list(self) -> List[str]:
         return list(self._table.keys())
+
+    def get_model_list(self) -> List[str]:
+        model_list = []
+        for name in self.get_filename_list():
+            file_ext = os.path.splitext(name)[1]
+            if file_ext in {'.mod', '.lnk'}:
+                model_list.append(name.rsplit('.')[0])
+        return model_list
+
+    def get_animation_list(self, model_name) -> List[str]:
+        with self.open(model_name, "r") as animation_container:
+            anm_res_file = ResFile(animation_container)
+            animations = anm_res_file.get_filename_list()
+        return animations
 
     def get_valid_data(self, recursive=True):
         # reread all res file entries and return them bytes

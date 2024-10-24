@@ -29,6 +29,10 @@ from .links import CLink
 from .resfile import ResFile
 from .scene_utils import MODEL, clear_unlinked_data
 
+from bpy.app import translations
+
+_ = translations.pgettext
+
 
 def get_duration(fn):
     start_time = time.time()
@@ -43,7 +47,7 @@ def get_name(cls, mesh_mask):
     else:
         base_coll = scene_utils.get_collection("base")
         text = str(len(base_coll.objects)) if base_coll else "all"
-    return cls.bl_label % text
+    return _(cls.bl_label) % text
 
 
 def reload_modules():
@@ -482,9 +486,9 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
 class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
     bl_label = 'Create morphs for %s meshes'
     bl_idname = 'object.automorphnew'
-    bl_description = 'Generates morph components based on existing -base- collection\n' \
-                     'WARN: applies R&S transforms to base collection \n' \
-                     'May break animation or model parent-child positioning'
+    bl_description = 'Generates morph components for existing "base" collection.\n' \
+                     'NOTE: applies R&S transforms to base collection ' \
+                     'which may break animation or model parent-child positioning'
 
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
@@ -652,7 +656,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
 
 
 class CRepackResFile(bpy.types.Operator):
-    bl_label = 'Repack'
+    bl_label = 'Optimize RES'
     bl_idname = 'object.repack_resfile'
     bl_description = 'Recursively repack .res archive, reducing file size'
 
@@ -664,7 +668,7 @@ class CRepackResFile(bpy.types.Operator):
 
 
 class CSelectResFileIndex(bpy.types.Operator):
-    bl_label = 'Select Resfile'
+    bl_label = 'Select RES'
     bl_idname = 'object.select_resfile'
     bl_description = 'Select this res file'
 
@@ -683,7 +687,8 @@ class CChooseResFile(bpy.types.Operator, ImportHelper):
     '''
     bl_label = 'Choose Resfile'
     bl_idname = 'object.choose_resfile'
-    bl_description = 'Select *.res file containing models, figures, animations. Usually Figures.res'
+    bl_description = ('*.res file containing models, figures, animations, usually figures.res.\n'
+                      ' Click [...] then [ ✓ ] to select.')
 
     filename_ext = ".res"
 
@@ -723,8 +728,7 @@ class CClear_OP_operator(bpy.types.Operator):
 class CImport_OP_operator(bpy.types.Operator):
     bl_label = 'Import %s meshes'
     bl_idname = 'object.model_import'
-    bl_description = 'Import Model/Figure from selected resfile into base collection.\n' \
-                     'Imports meshes based on mesh mask.'
+    bl_description = 'Import model/figure from selected RES into "base" collection.'
 
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
@@ -732,39 +736,36 @@ class CImport_OP_operator(bpy.types.Operator):
 
     get_name = classmethod(get_name)
 
+    def null_result(self, res, model_name):
+        item_list = res.get_model_list()
+        self.report({'ERROR'}, 'Can not find model %s.\nItems list:%s' % (model_name, item_list))
+        return {'CANCELLED'}
+
     def execute(self, context):
         self.report({'INFO'}, 'Executing import model')
 
         res_path = bpy.context.scene.res_file
         if not res_path or not os.path.exists(res_path):
-            self.report({'ERROR'}, 'Res file not found at:' + res_path)
+            self.report({'ERROR'}, _('RES file not found at: %s') % res_path)
             return {'CANCELLED'}
 
+        reload_modules()
+        res = ResFile(res_path)
         model_name: bpy.props.StringProperty = bpy.context.scene.figmodel_name
         if not model_name:
             self.report({'ERROR'}, 'Model/Figure name is empty')
-            return {'CANCELLED'}
-
-        res_file = ResFile(res_path)
-        reload_modules()
+            return self.null_result(res, model_name)
 
         mesh_mask = self.mesh_mask
         mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
 
         bpy.context.window_manager.progress_begin(0, 99)
-        func = lambda: scene_utils.import_model(context, res_file, model_name, mesh_mask_set)
-        res, duration = get_duration(func)
+        func = lambda: scene_utils.import_model(context, res, model_name, mesh_mask_set)
+        result, duration = get_duration(func)
         bpy.context.window_manager.progress_end()
 
-        if res is None:
-            item_list = list()
-            for name in res_file.get_filename_list():
-                if name.lower().endswith('.mod') or name.lower().endswith('.lnk'):
-                    item_list.append(name.rsplit('.')[0])
-
-            self.report({'ERROR'}, 'Can not find ' + model_name + \
-                        '\nItems list: ' + str(item_list))
-            return {'CANCELLED'}
+        if result is None:
+            return self.null_result(res, model_name)
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
@@ -773,11 +774,9 @@ class CImport_OP_operator(bpy.types.Operator):
 class CExport_OP_operator(bpy.types.Operator):
     bl_label = 'Export %s meshes'
     bl_idname = 'object.model_export'
-    bl_description = 'Export Evil Islands Model/Figure file.\n' \
-                     'Exports meshes based on mesh mask.\n' \
-                     '(the entire mesh tree still needs to be present in the scene to preserve model structure)\n' \
-                     'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
-                     'otherwise you\'ll get broken animation ingame'
+    bl_description = ("Export models in base/morph collections into selected RES file.\n"
+                      "NOTE: Export needs all eight morph collections in the scene.\n"
+                      "NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n")
 
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
@@ -830,13 +829,19 @@ class CExport_OP_operator(bpy.types.Operator):
 class CAnimation_OP_import(bpy.types.Operator):
     bl_label = 'Import animation into %s collection'
     bl_idname = 'object.animation_import'
-    bl_description = 'Import Animations for model\n' \
-                     'Uses \"base\" collection as template'
+    bl_description = 'Import animation and animate meshes in base collection, or its copy with new name'
 
     target_collection: bpy.props.StringProperty(
         default="base",
         options={'HIDDEN'},
         maxlen=255, )
+
+    @classmethod
+    def get_name(cls):
+        context = bpy.context
+        use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
+        name = _(cls.bl_label) % use_collection
+        return name
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation import')
@@ -846,38 +851,32 @@ class CAnimation_OP_import(bpy.types.Operator):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
             return {'CANCELLED'}
 
-        if not scene_utils.get_collection("base"):
-            self.report({'ERROR'}, 'No base collection exists in the scene.')
-            return {'CANCELLED'}
-
         anm_name = bpy.context.scene.animation_name
         model_name = bpy.context.scene.figmodel_name
-        resFile = ResFile(res_path)
+        res_file = ResFile(res_path)
 
         if not model_name:
             self.report({'ERROR'}, 'Model/Figure name is empty')
             return {'CANCELLED'}
 
-        if not anm_name:
-            self.report({'ERROR'}, 'Animation name is empty')
-            return {'CANCELLED'}
-
-        if not scene_utils.get_collection("base"):
-            self.report({'ERROR'}, 'No base collection exists')
-            return {'CANCELLED'}
-
         # choosing model to load
-        if model_name + '.anm' not in resFile.get_filename_list():
+        if model_name + '.anm' not in res_file.get_filename_list():
             self.report({'ERROR'}, 'Animations set for ' + model_name + 'not found')
             return {'CANCELLED'}
 
-        with resFile.open(model_name + '.anm') as animation_container:
-            anm_res_file = ResFile(animation_container)
-            anm_list = anm_res_file.get_filename_list()
-            if anm_name not in anm_list:  # set of animations
-                self.report({'ERROR'}, 'Can not find ' + anm_name + \
-                            '\nAnimation list: ' + str(anm_list))
-                return {'CANCELLED'}
+        animations = res_file.get_animation_list(model_name + ".anm")
+
+        if not anm_name:
+            self.report({'ERROR'}, 'Animation name is empty')
+
+        if anm_name not in animations:  # set of animations
+            self.report({'ERROR'}, 'Can not find ' + anm_name + \
+                        '\nAnimation list: ' + str(animations))
+            return {'CANCELLED'}
+
+        if not scene_utils.get_collection("base"):
+            self.report({'ERROR'}, 'No base collection exists in the scene.')
+            return {'CANCELLED'}
 
         # fix names for base collection being imported
         animation_destination_name = self.target_collection
@@ -889,28 +888,31 @@ class CAnimation_OP_import(bpy.types.Operator):
 
         reload_modules()
         self.report({'INFO'}, f'Renaming .001-like names for "{animation_destination_name}"')
-        scene_utils.rename_drop_postfix(scene_utils.get_collection(animation_destination_name).objects)
-        animations = scene_utils.read_animations(resFile, model_name, anm_name)
-        links = scene_utils.collect_links(animation_destination_name)
-        scene_utils.ei2abs_rotations(links, animations)
 
-        bAutofix = bpy.context.scene.animsubfix
-        if not bAutofix:
-            scene_utils.abs2Blender_rotations(links, animations)
+        def do_import():
+            scene_utils.rename_drop_postfix(scene_utils.get_collection(animation_destination_name).objects)
+            animations = scene_utils.read_animations(res_file, model_name, anm_name)
+            links = scene_utils.collect_links(animation_destination_name)
+            scene_utils.ei2abs_rotations(links, animations)
 
-        scene_utils.insert_animation(animation_destination_name, animations)
-        context.scene.frame_set(0)
-        self.report({'INFO'}, 'Done')
+            bAutofix = bpy.context.scene.animsubfix
+            if not bAutofix:
+                scene_utils.abs2Blender_rotations(links, animations)
+
+            scene_utils.insert_animation(animation_destination_name, animations)
+            context.scene.frame_set(0)
+
+        _, duration = get_duration(do_import)
+
+        self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
 
 
 class CAnimation_OP_Export(bpy.types.Operator):
-    bl_label = 'Export animation as %s collection'
+    bl_label = 'Export animation from %s collection'
     bl_idname = 'object.animation_export'
-    bl_description = 'Export animations for model from container Name\n' \
-                     'Uses collection frame range frame begin/end\n' \
-                     'NOTE: Models with morph/shapekey animation need morph component scaling set to 1\n' \
-                     'otherwise you\'ll get broken animation ingame'
+    bl_description = ('NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n'
+                      'May want to keep their morphs identical to base')
 
     target_collection: bpy.props.StringProperty(
         default="base",
@@ -959,26 +961,11 @@ class CAnimation_OP_Export(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class CAnimation_OP_UE4_Toolchain(bpy.types.Operator):
-    bl_label = 'UE4 to EI'
-    bl_idname = 'object.ue4_toolchain'
-    bl_description = 'Transform UE4 animated model into shapekeyed mesh\n' \
-                     'Operates on root->armature->mesh structure, with root selected.'
-
-    def execute(self, context):
-        self.report({'INFO'}, f'Executing UE4 to EI')
-        reload_modules()
-        scene_utils.ue4_toolchain(self, context)
-        self.report({'INFO'}, f'Done')
-        return {'FINISHED'}
-
-
 class CAnimation_OP_shapekey(bpy.types.Operator):
-    bl_label = 'Shapekey animation Operator'
+    bl_label = 'Animation to shapekeys'
     bl_idname = 'object.animation_shapekey'
-    bl_description = "Select two models, FROM and DEST (the square-highlighted\n" \
-                     "object's icon will be DEST).\n" \
-                     "FROM's vertex animation will be transferred as shapekeys to DEST"
+    bl_description = "Select SRC and DEST (the square-highlighted one)\n" \
+                     "Action will transfer SRC's vertex animation to DEST's shapekey animation"
 
     def execute(self, context):
         reload_modules()
@@ -991,7 +978,7 @@ class CAnimation_OP_shapekey(bpy.types.Operator):
 
 
 class CAnimation_OP_BakeTransform(bpy.types.Operator):
-    bl_label = 'Bake transform operator'
+    bl_label = 'Bake transform'
     bl_idname = 'object.animation_bake_transform'
     bl_description = 'For each object in selection, moves location / rotation / scale animation into shapekeys.\n' \
                      'Ignores objects with shapekeys (morph animation)'
@@ -1013,10 +1000,24 @@ class CAnimation_OP_BakeTransform(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class CAnimation_OP_UE4_Toolchain(bpy.types.Operator):
+    bl_label = 'UE4 to shapekeys'
+    bl_idname = 'object.ue4_toolchain'
+    bl_description = 'Transform UE4 skeleton-animated model into shapekeyed mesh\n' \
+                     'Operates on root->armature->mesh structure, with root selected.'
+
+    def execute(self, context):
+        self.report({'INFO'}, f'Executing UE4 to EI')
+        reload_modules()
+        scene_utils.ue4_toolchain(self, context)
+        self.report({'INFO'}, f'Done')
+        return {'FINISHED'}
+
+
 class CRenameDropPostfix_OP_operator(bpy.types.Operator):
-    bl_label = 'EI model export Operator'
+    bl_label = 'Drop .001 name part'
     bl_idname = 'object.rename_drop_postfix'
-    bl_description = 'Rename selected objects as to drop .001 etc from the names'
+    bl_description = 'Removes dot-numeric part from <*>.001 names to just <*>'
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing rename - drop postifx')

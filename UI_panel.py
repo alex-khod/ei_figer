@@ -17,6 +17,9 @@ import bpy
 from . import scene_utils
 from . import operators
 
+from bpy.app import translations
+_ = translations.pgettext
+
 
 class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
     bl_label = 'import-export'
@@ -30,13 +33,14 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        layout.label(text="Current RES:")
+        layout.label(text=str(context.scene.res_file), icon='FILE_FOLDER')
         for index in range(0, 3):
             row = layout.row()
             elem = row.split(factor=0.8)
             elem.prop(context.scene, 'res_file_buffer%d' % index)
             elem.operator('object.choose_resfile', text='...').res_file_index = index
-            elem.operator('object.select_resfile', text='Select').res_file_index = index
-        layout.label(text=str(context.scene.res_file), icon='FILE_FOLDER')
+            elem.operator('object.select_resfile', text="✓").res_file_index = index
         layout.prop(context.scene, 'figmodel_name')
         layout.prop(context.scene, 'mesh_mask')
         mesh_mask = context.scene.mesh_mask
@@ -83,7 +87,7 @@ class OPERATOR_PT_PANEL(bpy.types.Panel):
         #        row = layout.split()
         #        left = split.column()
         left.prop(context.scene, 'figcopy_parent')
-        layout.operator('object.rename_drop_postfix', text='Drop .001 name part')
+        layout.operator('object.rename_drop_postfix')
         row = layout.split()
         split = split.column()
         split = row.split(factor=1.2)
@@ -177,18 +181,18 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
         layout.prop(context.scene, 'animsubfix')
         layout.prop(context.scene, 'is_animation_to_new_collection')
         use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
-        label = operators.CAnimation_OP_import.bl_label % use_collection
+        label = _(operators.CAnimation_OP_import.bl_label) % use_collection
         layout.operator('object.animation_import', text=label).target_collection = use_collection
         layout.prop(context.scene, 'is_use_mesh_frame_range')
-        label = operators.CAnimation_OP_Export.bl_label % use_collection
+        label = _(operators.CAnimation_OP_Export.bl_label) % use_collection
         layout.operator('object.animation_export', text=label).target_collection = use_collection
 
         donor, acceptor = scene_utils.get_donor_acceptor(context)
-        layout.label(text=f"FROM: {donor.name if donor else None}")
-        layout.label(text=f"DEST: {acceptor.name if acceptor else None}")
-        layout.operator('object.animation_shapekey', text='Shapekey')
+        layout.label(text=_("SRC: %s") % (donor.name if donor else None))
+        layout.label(text=_("DEST: %s") % (acceptor.name if acceptor else None))
+        layout.operator('object.animation_shapekey')
         # layout.prop(context.scene, 'skeletal')
-        layout.operator('object.animation_bake_transform', text='Bake transform')
+        layout.operator('object.animation_bake_transform')
         layout.operator('object.ue4_toolchain')
         # layout.separator()
         # layout.operator('object.debug_test')
@@ -199,9 +203,9 @@ def outliner_mt_collection(self: bpy.types.OUTLINER_MT_collection, context):
     layout.separator()
     active_collection = context.view_layer.active_layer_collection
     active_collection_name = active_collection.name
-    label = operators.CAnimation_OP_import.bl_label % active_collection_name
+    label = _(operators.CAnimation_OP_import.bl_label) % active_collection_name
     layout.operator('object.animation_import', text=label).target_collection = active_collection_name
-    label = operators.CAnimation_OP_Export.bl_label % active_collection_name
+    label = _(operators.CAnimation_OP_Export.bl_label) % active_collection_name
     layout.operator('object.animation_export', text=label).target_collection = active_collection_name
 
 
