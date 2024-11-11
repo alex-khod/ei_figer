@@ -222,7 +222,7 @@ def import_mod_file(res_file, model_name, include_meshes=None):
 
 
 def import_lnk_fig_bon_files(res_file, model_name, include_meshes=None):
-    print("reading lnk")
+    print("reading lnk-fig-bon")
     active_model: CModel = bpy.types.Scene.model
     active_model.reset('fig')
     active_model.name = model_name
@@ -669,8 +669,17 @@ def insert_animation(to_collection: str, anm_list: CAnimations):
             for frame in range(len(part.morphations)):
                 key = obj.shape_key_add(name=str(frame), from_mix=False)
 
-                frame_data = vertices_data + part.morphations[frame]
-                n_frame_vertices = len(frame_data)
+                n_animated_vertices = part.morphations[frame].shape[0]
+                if n_vertices != n_animated_vertices:
+                    # vanilla magic banshee (unmoba1) doesn't have enough data for all animation vertices
+                    # in its cidle animation.
+                    # thus, assume only first n vertices in a mesh are animated as a "fix"
+                    frame_data = vertices_data.copy()
+                    frame_data[:n_animated_vertices] = frame_data[:n_animated_vertices] + part.morphations[frame]
+                else:
+                    # works for most models
+                    frame_data = vertices_data + part.morphations[frame]
+
                 key.data.foreach_set('co', frame_data.flatten())
                 insert_keyframe(key, frame)
     return True
