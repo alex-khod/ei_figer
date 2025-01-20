@@ -54,6 +54,9 @@ class CItemGroup:
         self.morph_component_count: int = c_count  # {1 or 8} experimental for easy import\export for user
         self.uv_base = uv_base or (0, 1)
 
+    def __str__(self):
+        return f"{self.__class__} < type: {self.type} mask: {self.mask} uvc: {self.uv_convert_count} uvb: {self.uv_base} >"
+
 
 class CItemGroupContainer:
     def __init__(self):
@@ -109,6 +112,7 @@ class CItemGroupContainer:
         for item in self.item_type:
             if item.mask.search(obj_name) is not None:
                 print("FOUND", obj_name)
+                print(item)
                 return item
         print("NOT FOUND", obj_name)
         # assert!!!!
@@ -127,18 +131,6 @@ def get_uv_params(name: str):
     container = CItemGroupContainer()
     group = container.get_item_group(name)
     return group.uv_convert_count, group.uv_base
-
-
-def get_uv_group_name(name: str):
-    container = CItemGroupContainer()
-    group = container.get_item_group(name)
-    return group.type
-
-
-def get_uv_base(name: str):
-    container = CItemGroupContainer()
-    group = container.get_item_group(name)
-    return group.uv_base
 
 
 def sumVector(vec1, vec2):
@@ -184,7 +176,7 @@ def pack_uv_np(uvs, count, uv_base=None):
     uv_base = uv_base[0] / 2, uv_base[1] / 2
     uv_base = np.array(uv_base, dtype=np.float32)
     for _ in range(count):
-        uvs = uv_base + uvs / 2
+        uvs = uvs / 2 + uv_base
     return uvs
 
 

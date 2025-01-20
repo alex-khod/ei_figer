@@ -86,7 +86,7 @@ class CFigure(object):
         else:
             self.morph_count = 1
 
-        print(self.name + ' have morph_count is ' + str(self.morph_count))
+        print(self.name + ' have morph_count of ' + str(self.morph_count))
 
         for i in range(9):
             self.header[i] = parser.read('L')
