@@ -44,6 +44,9 @@ class CByteReader:
         return self._raw_data
 
 
+UV_BASE_DEFAULT = (0, 1)
+
+
 class CItemGroup:
     def __init__(self, type, mask, uv_convert_count, ei_group, t_number, c_count, uv_base=None):
         self.type: str = type
@@ -52,7 +55,7 @@ class CItemGroup:
         self.ei_group: int = ei_group
         self.t_number: int = t_number
         self.morph_component_count: int = c_count  # {1 or 8} experimental for easy import\export for user
-        self.uv_base = uv_base or (0, 1)
+        self.uv_base = uv_base or UV_BASE_DEFAULT
 
     def __str__(self):
         return f"{self.__class__} < type: {self.type} mask: {self.mask} uvc: {self.uv_convert_count} uvb: {self.uv_base} >"
@@ -61,14 +64,11 @@ class CItemGroup:
 class CItemGroupContainer:
     def __init__(self):
         self.item_type: list[CItemGroup] = [
-            # TODO: check from models
-            CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 0, 19, 8, 1,
-                       uv_base=(-1, -1))
-            # CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 0, 19, 8, 1)
-            , CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 0, 18, 8, 1, uv_base=(-1, -1))
+            CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 0, 19, 8, 1)
+            , CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 0, 18, 8, 1)
             # ,CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1)
             ,
-            CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 0, 18, 8, 1, uv_base=(-1, -1))
+            CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 0, 18, 8, 1)
             # ,CItemGroup('shop weapons/armors2', re.compile(r'armor\D+'), 1, 18, 8, 1)
             , CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1)
             , CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1)
@@ -78,23 +78,23 @@ class CItemGroupContainer:
             # ,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
             # ,CItemGroup('shield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(0, 0))
 
-            , CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 1, 19, 2, 8, uv_base=(0, 1))
-            , CItemGroup('archery', re.compile(r'(\.(crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
+            , CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 1, 19, 2, 8)
+            , CItemGroup('archery', re.compile(r'(\.(crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8)
             ,
             CItemGroup('archery2', re.compile(r'(\.(crbow..part|bw..part\D+)|^crbow..part|^bw..part\D+)\d+'), 1, 18, 2,
-                       8, uv_base=(0, 1))
+                       8)
             , CItemGroup('shield', re.compile(r'lh2\.axe\d+'), 1, 18, 2, 8, uv_base=(1, 1))
             , CItemGroup('exshield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(1, 1))
             , CItemGroup('staffleft', re.compile(r'lh3\.staff\D+'), 1, 18, 2, 8, uv_base=(1, 1))
             , CItemGroup('stafflefttwo', re.compile(r'lh3\.dstaff\D+'), 1, 18, 2, 8, uv_base=(1, 1))
-            , CItemGroup('staffright', re.compile(r'rh3\.staff\D+'), 1, 18, 2, 8, uv_base=(0, 1))
-            , CItemGroup('staffrighttwo', re.compile(r'rh3\.dstaff\D+'), 1, 18, 2, 8, uv_base=(0, 1))
+            , CItemGroup('staffright', re.compile(r'rh3\.staff\D+'), 1, 18, 2, 8)
+            , CItemGroup('staffrighttwo', re.compile(r'rh3\.dstaff\D+'), 1, 18, 2, 8)
             , CItemGroup('weapons left', re.compile(
                 r'(lh3\.(pike|dpike|sword|dsword|dagger|club|dclub|axe|daxe|staff|dstaff|shit1|shit2\D+)|^shit1|^shit2\D+)\d+'),
                          1, 18, 2, 8, uv_base=(1, 1))
             , CItemGroup('weapons', re.compile(
                 r'(\.(pike|dpike|sword|dsword|dagger|club|dclub|axe|daxe|staff|dstaff|crbow|bw\D+)|^crbow|^bw\D+)\d+'),
-                         1, 18, 2, 8, uv_base=(0, 1))
+                         1, 18, 2, 8)
             , CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
 
             # ,CItemGroup('weapons left', re.compile(r'((lh3.pike|lh3.sword|lh3.dagger|lh3.2axe|lh3.club|lh3.axe|lh3.crbow|bw\D+)|^lh3.crbow|^lh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1))
@@ -104,7 +104,6 @@ class CItemGroupContainer:
 
             , CItemGroup('armr', re.compile(r'\.armor\d+'), 0, 19, 1, 8)
             , CItemGroup('unit', re.compile(r'un(an|mo|hu|or|sk).+'), 0, 19, 1, 8)
-
             , CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8)  # LAST
         ]
 
@@ -119,17 +118,8 @@ class CItemGroupContainer:
         return None
 
 
-def get_uv_convert_count(name: str):
-    '''
-    gets count of convert uv coordinates depending on filename
-    '''
-    container = CItemGroupContainer()
-    return container.get_item_group(name).uv_convert_count
-
-
 def get_uv_params(name: str):
-    container = CItemGroupContainer()
-    group = container.get_item_group(name)
+    group = CItemGroupContainer().get_item_group(name)
     return group.uv_convert_count, group.uv_base
 
 
@@ -161,8 +151,6 @@ def mulVector(vec1, scalar):  # multiply vector with scalar
 
 
 def unpack_uv_np(uvs, count, uv_base=None):
-    if uv_base == (-1, -1) or uv_base is None:
-        uv_base = (0, 1)
     uv_base = uv_base[0], uv_base[1]
     uv_base = np.array(uv_base, dtype=np.float32)
     for _ in range(count):
@@ -171,8 +159,6 @@ def unpack_uv_np(uvs, count, uv_base=None):
 
 
 def pack_uv_np(uvs, count, uv_base=None):
-    if uv_base == (-1, -1) or uv_base is None:
-        uv_base = (0, 1)
     uv_base = uv_base[0] / 2, uv_base[1] / 2
     uv_base = np.array(uv_base, dtype=np.float32)
     for _ in range(count):
