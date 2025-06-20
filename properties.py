@@ -16,12 +16,25 @@ import bpy
 from .scene_utils import calculate_mesh
 from .scene_management import CModel
 from bpy.app import translations
+# from typing import TYPE_CHECKING
 
 _ = translations.pgettext
 
+# todo refactor into groups
+# class MyPropertyGroup(bpy.types.PropertyGroup):
+#     custom_1: bpy.props.FloatProperty(name="My Float")
+#     custom_2: bpy.props.IntProperty(name="My Int")
 
 def register_props():
     scene = bpy.types.Scene
+
+    set_items = [("VANILLA", "Vanilla", "default"), ("JABAIS_VOUX", "Jabais Voux", "")]
+    scene.item_container_set = bpy.props.EnumProperty(
+        items=set_items,
+        name="Item container set type",
+        description="Affects model import/export and UV wrapping",
+        default="VANILLA",
+    )
 
     scene.res_file_index = bpy.props.IntProperty(
         name='ResFileIdx',
@@ -269,7 +282,10 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
         default=True
     )
     scene.model = CModel()
+    return scene
 
+AddonScene = register_props()
+bpy.types.Scene = AddonScene
 
 def unregister_props():
     scene = bpy.types.Scene

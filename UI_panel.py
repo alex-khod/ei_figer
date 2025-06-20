@@ -45,12 +45,14 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
         layout.prop(context.scene, 'mesh_mask')
         mesh_mask = context.scene.mesh_mask
         op_name = operators.CImport_OP_operator.get_name(mesh_mask)
+        layout.prop(context.scene, 'item_container_set')
         layout.operator('object.model_import', text=op_name).mesh_mask = mesh_mask
         row = layout.split()
         row.prop(context.scene, 'auto_fix')
         row.prop(context.scene, 'ether')
         row.prop(context.scene, 'is_export_unique', text="compact")
         layout.prop(context.scene, 'is_ignore_without_morphs')
+
         op_name = operators.CExport_OP_operator.get_name(mesh_mask)
         layout.operator('object.model_export', text=op_name).mesh_mask = mesh_mask
         row = layout.row()
