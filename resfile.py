@@ -4,15 +4,18 @@ import os.path
 import struct
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from .helpers import read_exactly
 
-_SIGNATURE = 0x019CE23C
+_SIGNATURE_EI = 0x019CE23C
+_SIGNATURE_ETH2RU = 0x019CE23D
 _HEADER_FORMAT = '<LLLL'
 _HEADER_SIZE = struct.calcsize(_HEADER_FORMAT)
-_TABLE_ENTRY_FORMAT = '<lLLLHL'
-_TABLE_ENTRY_SiZE = struct.calcsize(_TABLE_ENTRY_FORMAT)
+_TABLE_ENTRY_FORMAT_EI = '<lLLLHL'
+# Etherlords 2 GOG (RU) have slightly different format for .RES:
+# Evil islands -
+_TABLE_ENTRY_FORMAT_ETH2RU = '<lLHLL'
 
 
 class InvalidResFile(Exception):
@@ -24,7 +27,7 @@ class ResFileItemInfo:
     name: str
     file_size: int
     file_offset: int
-    modify_time: datetime
+    modify_time: Optional[datetime] = None
 
 
 class _ResSubFile(io.BufferedIOBase):
@@ -115,10 +118,11 @@ class ResFile:
         if mode not in ('r', 'w', 'a'):
             raise ValueError('ResFile requires mode "r", "w", "a"')
 
+        self._signature: int = None
         self._opened = isinstance(file, str)
         self._file = file if not self._opened else None
         self._mode = mode
-        self._table = {}
+        self._table: dict[str, ResFileItemInfo] = {}
         self._subfile = None
 
         if not self._file and self._mode == 'a':
@@ -137,7 +141,7 @@ class ResFile:
     def is_res_file(cls, bytes_):
         sigbytes = bytes_[:4]
         sig = struct.unpack('L', sigbytes)[0]
-        return sig == _SIGNATURE
+        return sig == _SIGNATURE_EI or sig == _SIGNATURE_ETH2RU
 
     def __enter__(self):
         return self
@@ -214,27 +218,55 @@ class ResFile:
     def _read_headers(self):
         self._file.seek(0)
         header_data = self._read(_HEADER_SIZE, 'File header is truncated')
-        magic, table_size, table_offset, names_size = struct.unpack(_HEADER_FORMAT, header_data)
-        if magic != _SIGNATURE:
-            raise InvalidResFile('Invalid signature')
+        signature, table_size, table_offset, names_size = struct.unpack(_HEADER_FORMAT, header_data)
+        # print('header signature, table_size, table_offset, names_size')
+        # print('header', signature, table_size, '0x%x' % table_offset, names_size)
+        if not (signature == _SIGNATURE_EI or signature == _SIGNATURE_ETH2RU):
+            raise InvalidResFile('Invalid signature:', '%x' % signature)
+        self._signature = signature
         self._file.seek(0, 2)
         res_file_size = self._file.tell()
-        table_data_size = table_size * _TABLE_ENTRY_SiZE
+
+        table_entry_format = self._get_table_entry_format()
+        table_entry_size = struct.calcsize(table_entry_format)
+        table_data_size = table_size * table_entry_size
         if table_offset + table_data_size + names_size > res_file_size:
             raise InvalidResFile('Files table is truncated')
+        self._read_table(table_offset, table_data_size, names_size)
 
+    def _get_table_entry_format(self):
+        signature = self._signature
+        table_entry_format = _TABLE_ENTRY_FORMAT_ETH2RU if signature == _SIGNATURE_ETH2RU else _TABLE_ENTRY_FORMAT_EI
+        return table_entry_format
+
+    def _read_table(self, table_offset, table_data_size, names_size):
         self._file.seek(table_offset)
         tables_data = self._read(table_data_size)
+        # print('%x', tables_data)
+        # for i in range(5):
+        #     offset = i*18
+        #     offset2 = (i+1)*18
+        #     data = tables_data[offset:offset2]
+        #     print(data.hex())
+        table_entry_format = self._get_table_entry_format()
         names_data = self._read(names_size)
-        for table_entry in struct.iter_unpack(_TABLE_ENTRY_FORMAT, tables_data):
-            _, file_size, file_offset, modify_timestamp, name_length, name_offset = table_entry
+        for table_entry in struct.iter_unpack(table_entry_format, tables_data):
+            modify_timestamp = None
+            if self._signature == _SIGNATURE_EI:
+                _, file_size, file_offset, modify_timestamp, name_length, name_offset = table_entry
+            else:
+                _, file_size, name_length, file_offset, name_offset = table_entry
+            # print(_, file_size, name_length, file_offset, name_offset)
             name = names_data[name_offset:name_offset + name_length].decode('cp1251')
+            modify_time = datetime.fromtimestamp(modify_timestamp) if modify_timestamp else None
             self._table[name] = ResFileItemInfo(
-                name=name, file_size=file_size, file_offset=file_offset,
-                modify_time=datetime.fromtimestamp(modify_timestamp)
+                name=name, file_size=file_size, file_offset=file_offset, modify_time=modify_time
             )
 
     def _write_headers(self):
+        # if (self._signature == _SIGNATURE_ETH2RU):
+        #     raise Exception('Not supported: Write for ETH_2_RU .res')
+        # Write any underlying .res as EI res.
         self._write_alignment()
         table_offset = self._file.tell()
 
@@ -264,15 +296,17 @@ class ResFile:
         # Write hash table
         encoded_names = []
         name_offset = 0
+        table_entry_format = _TABLE_ENTRY_FORMAT_EI
         for entry, next_index in hash_table:
             encoded_names.append(entry.name.encode('cp1251'))
             name_length = len(encoded_names[-1])
+            modify_time = entry.modify_time or datetime.now()
             data = struct.pack(
-                _TABLE_ENTRY_FORMAT,
+                table_entry_format,
                 next_index,
                 entry.file_size,
                 entry.file_offset,
-                int(entry.modify_time.timestamp()),
+                int(modify_time.timestamp()),
                 name_length,
                 name_offset,
             )
@@ -285,7 +319,7 @@ class ResFile:
 
         # Update file header
         self._file.seek(0)
-        data = struct.pack(_HEADER_FORMAT, _SIGNATURE, len(hash_table), table_offset, name_offset)
+        data = struct.pack(_HEADER_FORMAT, _SIGNATURE_EI, len(hash_table), table_offset, name_offset)
         self._file.write(data)
 
     def get_filename_list(self) -> List[str]:

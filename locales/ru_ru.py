@@ -20,10 +20,10 @@ translation = {
     ("*", 'Import model/figure from selected RES into "base" collection.'):
         'Импорт модели/фигуры из выбранного RES в коллекцию "base"',
     ("*", 'Export %s meshes'): 'Экспорт %s мешей',
-    ("*", ("Export models in base/morph collections into selected RES file.\n"
+    ("*", ("Export models in base/morph collections into selected RES file, Evil Islands format (not Etherlords).\n"
            "NOTE: Export needs all eight morph collections in the scene.\n"
            "NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n")):
-        'Экспортировать модели из коллекций "base"/морф в выбранный RES файл.\n'
+        'Экспортировать модели из коллекций "base"/морф в выбранный RES файл (в формате ПЗ, не демиурги).\n'
         "N.B.: Требуются все восемь морф-коллекций в сцене.\n" \
         "N.B.: Морфанимации/шейпкей анимации (в оригинале крылья дракона, летучей мыши) работают относительно базовой модели.\n" \
         "Поэтому если морф компоненты от неё отличаются, анимации будут выглядеть неправильно",
@@ -67,9 +67,11 @@ translation = {
 
     ("*", "Import animation into %s collection"): "Импортировать анимации в коллекцию %s",
     ("*", "Export animation from %s collection"): "Экспортировать анимации из коллекции %s",
-    ("*", ('NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n'
+    ("*", ('Export animation in Evil islands format.\n'
+           'NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n'
            'May want to keep their morphs identical to base')):
-        ('N.B.: Морфанимации (в оригинале крылья дракона, летучей мыши) работают относительно базовой модели\n'
+        ('Экспортировать анимации в формате Проклятых земель.\n'
+         'N.B.: Морфанимации (в оригинале крылья дракона, летучей мыши) работают относительно базовой модели\n'
          'Вероятно, следует делать их морф-компоненты идентичными "base"'),
 
     ("*", "SRC: %s"): "ИСТОЧНИК: %s",

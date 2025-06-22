@@ -23,18 +23,20 @@ from . import figure
 from . import utils as fig_utils
 from . import scene_management
 from . import animation
+from . import resfile
 from .figure import CFigure
 from .bone import CBone
 from .links import CLink
-from .resfile import ResFile
 from .scene_utils import MODEL, clear_unlinked_data
+
+ResFile = resfile.ResFile
 
 from bpy.app import translations
 
 _ = translations.pgettext
 
 
-def get_duration(fn):
+def call_with_time(fn):
     start_time = time.time()
     res = fn()
     duration = time.time() - start_time
@@ -56,6 +58,8 @@ def reload_modules():
     importlib.reload(fig_utils)
     importlib.reload(scene_management)
     importlib.reload(animation)
+    # doesn't reload resfile?
+    importlib.reload(resfile)
 
 
 class CRefreshTestTable(bpy.types.Operator):
@@ -520,7 +524,7 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
 
         reload_modules()
         scene_utils.clear_unlinked_data()
-        res, duration = get_duration(lambda: scene_utils.create_all_morphs(context, mesh_mask_set))
+        res, duration = call_with_time(lambda: scene_utils.create_all_morphs(context, mesh_mask_set))
         self.report({'INFO'}, f'Done in {duration:.2f}')
         return {'FINISHED'}
 
@@ -719,7 +723,7 @@ class CClear_OP_operator(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         bpy.context.window_manager.progress_begin(0, 99)
-        _, duration = get_duration(lambda: scene_utils.scene_clear())
+        _, duration = call_with_time(lambda: scene_utils.scene_clear())
         bpy.context.window_manager.progress_end()
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
@@ -761,7 +765,7 @@ class CImport_OP_operator(bpy.types.Operator):
 
         bpy.context.window_manager.progress_begin(0, 99)
         func = lambda: scene_utils.import_model(context, res, model_name, mesh_mask_set)
-        result, duration = get_duration(func)
+        result, duration = call_with_time(func)
         bpy.context.window_manager.progress_end()
 
         if result is None:
@@ -774,7 +778,7 @@ class CImport_OP_operator(bpy.types.Operator):
 class CExport_OP_operator(bpy.types.Operator):
     bl_label = 'Export %s meshes'
     bl_idname = 'object.model_export'
-    bl_description = ("Export models in base/morph collections into selected RES file.\n"
+    bl_description = ("Export models in base/morph collections into selected RES file, Evil Islands format (not Etherlords).\n"
                       "NOTE: Export needs all eight morph collections in the scene.\n"
                       "NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n")
 
@@ -811,7 +815,7 @@ class CExport_OP_operator(bpy.types.Operator):
         mesh_mask_set = set(map(str.strip, mesh_mask.split(','))) if mesh_mask else None
         func = lambda: scene_utils.export_model(context, res_path, model_name, mesh_mask_set)
         bpy.context.window_manager.progress_begin(0, 99)
-        res, duration = get_duration(func)
+        res, duration = call_with_time(func)
 
         warn = ''
         if res:
@@ -851,6 +855,7 @@ class CAnimation_OP_import(bpy.types.Operator):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
             return {'CANCELLED'}
 
+        reload_modules()
         anm_name = bpy.context.scene.animation_name
         model_name = bpy.context.scene.figmodel_name
         res_file = ResFile(res_path)
@@ -902,7 +907,7 @@ class CAnimation_OP_import(bpy.types.Operator):
             scene_utils.insert_animation(animation_destination_name, animations)
             context.scene.frame_set(0)
 
-        _, duration = get_duration(do_import)
+        _, duration = call_with_time(do_import)
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
@@ -911,7 +916,8 @@ class CAnimation_OP_import(bpy.types.Operator):
 class CAnimation_OP_Export(bpy.types.Operator):
     bl_label = 'Export animation from %s collection'
     bl_idname = 'object.animation_export'
-    bl_description = ('NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n'
+    bl_description = ('Export animation in Evil islands format.\n'
+                      'NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n'
                       'May want to keep their morphs identical to base')
 
     target_collection: bpy.props.StringProperty(
@@ -954,8 +960,8 @@ class CAnimation_OP_Export(bpy.types.Operator):
             frame_range = context.scene.frame_start, context.scene.frame_end
 
         self.report({'INFO'}, f'Exporting frames from {frame_range[0]} to {frame_range[1]}')
-        _, duration = get_duration(lambda: scene_utils.export_animation(context, frame_range, animation_source_name,
-                                                                        res_path))
+        _, duration = call_with_time(lambda: scene_utils.export_animation(context, frame_range, animation_source_name,
+                                                                          res_path))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
@@ -994,7 +1000,7 @@ class CAnimation_OP_BakeTransform(bpy.types.Operator):
             return {"CANCELLED"}
 
         reload_modules()
-        _, duration = get_duration(lambda: scene_utils.bake_transform_animation(context))
+        _, duration = call_with_time(lambda: scene_utils.bake_transform_animation(context))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}
