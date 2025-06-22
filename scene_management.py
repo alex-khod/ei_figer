@@ -21,7 +21,7 @@ from .bone import CBone
 
 class CAnimations():
     def __init__(self, anm_list):
-        self.anm_list = anm_list
+        self.anm_list: list[CAnimation] = anm_list
 
     def __repr__(self):
         length = len(self.anm_list)

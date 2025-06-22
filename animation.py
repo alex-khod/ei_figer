@@ -30,8 +30,9 @@ class CAnimation(object):
         self.rotations = []  # rotation in w,x,y,z for each frame
         self.abs_rotation: list[Quaternion] = []
         self.translations = []
+        self.scalings = []
         self.morphations = []
-        self.something = []  # масштаб?
+        self.num_morph_verts = 0
         self.frameinfo = []
 
     def __repr__(self):
@@ -44,38 +45,38 @@ class CAnimation(object):
         """
         self.name = name
         parser = CByteReader(raw_data)
-
+        print('anm_name', name)
         # rotations
         rot_count = parser.read('L')
-        for _ in range(rot_count):
-            self.rotations.append(Quaternion(parser.read('ffff')))
+        print('rot_count', rot_count)
+        rotations = [Quaternion(parser.read('ffff')) for _ in range(rot_count)]
+        self.rotations = rotations
 
-        # translations
         trans_count = parser.read('L')
-        for _ in range(trans_count):
-            self.translations.append(parser.read('fff'))  # ddd для ether2
+        print('trans_count', trans_count)
+        translations = [(parser.read('fff')) for _ in range(trans_count)]
+        self.translations = translations
 
         bEtherlord = bpy.context.scene.ether
         if bEtherlord:
-            # scalings?
-            something_frame_count = parser.read('L')
-            # print('name = ' + name)
-            # print('something_frame_count = ' + str(something_frame_count))
-            for _ in range(something_frame_count):
-                something = self.something.append(parser.read('fff'))
-                # print('something = ' + str(something))
+            scale_count = parser.read('L')
+            print('scale_count', scale_count)
+            scalings = [parser.read('fff') for _ in range(scale_count)]
+            self.scalings = scalings
 
         morph_frame_count = parser.read('L')
         morph_vert_count = parser.read('L')
-        if parser.is_EOF():
-            # print('EOF reached')
-            return 0
+        self.num_morph_verts = morph_vert_count
+
+        print('morph frames:', morph_frame_count, 'morph verts:', morph_vert_count)
 
         morphanim_data = parser.read('%df' % (morph_frame_count * morph_vert_count * 3))
         self.morphations = np.array(morphanim_data).reshape((morph_frame_count, morph_vert_count, 3))
+
         if parser.is_EOF():
-            # print('EOF reached')
+            # print('EOF reached (morphs)')
             return 0
+        print('Warning: no EOF!')
         return 1
 
     def write_anm(self):

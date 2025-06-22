@@ -196,6 +196,11 @@ def read_animations(resFile: ResFile, model_name: str, animation_name: str) -> C
                     part = part_res.read()
                     anm = CAnimation()
                     anm.read_anm(part_name, part)
+                    # try:
+                    #     anm.read_anm(part_name, part)
+                    # except Exception as e:
+                    #     print('crash', e)
+                    #     continue
                     anm_list.append(anm)
     return CAnimations(anm_list)
 
@@ -532,6 +537,11 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     active_model: CModel = bpy.context.scene.model
 
     n_indices = figure.header[3] - figure.header[3] % 3
+
+    print('head', figure.header)
+    print('head', figure.header[3])
+
+
     indexes = figure.indicies[:n_indices]
     n_tris = n_indices // 3
     component_indexes = indexes
@@ -634,51 +644,45 @@ def insert_keyframe(sk, f):
 def insert_animation(to_collection: str, anm_list: CAnimations):
     clear_animation_data(to_collection)
 
-    for part in anm_list:
-        if part.name not in bpy.data.objects:
-            print('object ' + part.name + ' not found in animation list')
+    for anim in anm_list:
+        if anim.name not in bpy.data.objects:
+            print('object ' + anim.name + ' not found in animation list')
             continue
 
-        obj = bpy.data.objects[part.name]
+        obj = bpy.data.objects[anim.name]
         obj.rotation_mode = 'QUATERNION'
         bpy.context.scene.frame_end = 0
-        bpy.context.scene.frame_end = len(part.rotations) - 1  # for example, 43 frames from 0 to 42
-        for frame in range(len(part.rotations)):
+        bpy.context.scene.frame_end = len(anim.rotations) - 1  # for example, 43 frames from 0 to 42
+
+        # print('rotations', len(part.translations), 'translations', len(part.rotations))
+
+        for frame in range(len(anim.rotations)):
             # rotations
             # bpy.context.scene.frame_set(frame)  # choose frame
-            obj.rotation_quaternion = part.rotations[frame]
+            obj.rotation_quaternion = anim.rotations[frame]
             obj.keyframe_insert(data_path='rotation_quaternion', frame=frame, index=-1)
-            # positions
-            bEtherlord = bpy.context.scene.ether
-            if not bEtherlord:
-                if obj.parent is None:  # root
-                    obj.location = part.translations[frame]
-                    obj.keyframe_insert(data_path='location', frame=frame, index=-1)
-            else:
-                obj.location = part.translations[frame]
+
+        bEtherlord = bpy.context.scene.ether
+        if bEtherlord or obj.parent is None:
+            for frame in range(len(anim.translations)):
+                obj.location = anim.translations[frame]
                 obj.keyframe_insert(data_path='location', frame=frame, index=-1)
 
         # morphations
-        if len(part.morphations) > 0:
+        if len(anim.morphations) > 0:
             n_vertices = len(obj.data.vertices)
             vertices_data = np.zeros(n_vertices * 3, np.float32)
             obj.data.vertices.foreach_get('co', vertices_data)
             vertices_data = vertices_data.reshape((n_vertices, 3))
 
+            frame_data = vertices_data.copy()
+
             obj.shape_key_add(name='basis', from_mix=False)
-            for frame in range(len(part.morphations)):
+            for frame in range(len(anim.morphations)):
                 key = obj.shape_key_add(name=str(frame), from_mix=False)
 
-                n_animated_vertices = part.morphations[frame].shape[0]
-                if n_vertices != n_animated_vertices:
-                    # vanilla magic banshee (unmoba1) doesn't have enough data for all animation vertices
-                    # in its cidle animation.
-                    # thus, assume only first n vertices in a mesh are animated as a "fix"
-                    frame_data = vertices_data.copy()
-                    frame_data[:n_animated_vertices] = frame_data[:n_animated_vertices] + part.morphations[frame]
-                else:
-                    # works for most models
-                    frame_data = vertices_data + part.morphations[frame]
+                n_animated_vertices = anim.num_morph_verts
+                frame_data[:n_animated_vertices] = vertices_data[:n_animated_vertices] + anim.morphations[frame]
 
                 key.data.foreach_set('co', frame_data.flatten())
                 insert_keyframe(key, frame)

@@ -29,7 +29,12 @@ class CByteReader:
 
     def read(self, format):
         size = struct.calcsize(format)
-        value = unpack(format, self._raw_data[self._offset:self._offset + size])
+        try:
+            value = unpack(format, self._raw_data[self._offset:self._offset + size])
+        except Exception as e:
+            print('parser error, offset', self.offset_hex(), len(self.left_over()), 'bytes left')
+            raise e
+
         if 's' * len(format) == format:
             value = b''.join(value)
         if len(value) == 1:
@@ -37,6 +42,17 @@ class CByteReader:
 
         self._offset += size
         return value
+
+    def reset(self):
+        self._offset = 0
+
+    def offset_hex(self):
+        offset_hex = '0x%x' % self._offset
+        return offset_hex
+
+    def left_over(self):
+        left_over = self._raw_data[self._offset:]
+        return left_over
 
     def is_EOF(self):
         return len(self._raw_data) == self._offset

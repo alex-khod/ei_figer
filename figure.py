@@ -107,7 +107,7 @@ class CFigure(object):
             self.radius.append(parser.read('f'))
         #        print('self.radius is ' + str(self.radius))
         # VERTICES
-        print(self.header)
+        # print('fig', signature, 'hdr', self.header)
         n_vertex_blocks = self.header[0]
         # block is XXXX * morph_count, YYYY * morph_count, ZZZZ * morph_count
         # 3 coords (XYZ) * morph_count * 4 coords (XXXX)
