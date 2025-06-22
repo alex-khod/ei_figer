@@ -79,6 +79,56 @@ class CAnimation(object):
         print('Warning: no EOF!')
         return 1
 
+    def read_anm_compact(self, name, raw_data: bytearray):
+        """
+        Reads animation data from byte array (from .res file)
+        Etherlords 2 GOG (EN) 2.0.0.3 have weird format, different from usual Evil Islands animations
+        No idea how it works, especially morphs.
+        """
+        self.name = name
+        parser = CByteReader(raw_data)
+        print('anm_name', name)
+        # rotations
+        rot_count = parser.read('H')
+        print('rot_count', rot_count)
+        rotations = [Quaternion(parser.read('ffff')) for _ in range(rot_count)]
+        self.rotations = rotations
+
+        trans_count = parser.read('H')
+        print('trans_count', trans_count)
+        translations = [(parser.read('hhh')) for _ in range(trans_count)]
+        if translations:
+            # ???
+            translations = np.array(translations) / 32768
+            translations = translations[:, [0, 1, 2]]
+        self.translations = translations
+
+        bEtherlord = bpy.context.scene.ether
+        if bEtherlord:
+            scale_count = parser.read('H')
+            print('scale_count', scale_count)
+            scalings = [parser.read('fff') for _ in range(scale_count)]
+            self.scalings = scalings
+
+        morph_frame_count = parser.read('H')
+        morph_vert_count = parser.read('H')
+        if parser.is_EOF():
+            print('EOF reached (no morphs)')
+            return 0
+
+        # ???
+        # return 0
+        # print('morph frames:', morph_frame_count, 'morph verts:', morph_vert_count)
+        print('offset', parser.offset_hex())
+        print(len(parser.left_over()))
+        morphanim_data = parser.read('%df' % (morph_frame_count * morph_vert_count * 3))
+        self.morphations = np.array(morphanim_data).reshape((morph_frame_count, morph_vert_count, 3))
+        if parser.is_EOF():
+            # print('EOF reached (morphs)')
+            return 0
+        print('Warning: no EOF!')
+        return 1
+
     def write_anm(self):
         raw_data = b''
         raw_data += pack('L', len(self.rotations))
