@@ -85,9 +85,9 @@ class CItemGroup:
 
 
 ITEM_GROUPS_JABAIS_VOUX = [
-    CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 0, 19, 8, 1),
-    CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 0, 18, 8, 1),
-    CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 0, 18, 8, 1),
+    CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 2, 19, 8, 1),
+    CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 1, 18, 8, 1),
+    CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1),
     CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1),
     CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1),
     # CItemGroup('weapons', re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18, 2, 8),
