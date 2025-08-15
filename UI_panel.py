@@ -14,11 +14,47 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import bpy
 
+from .resfile import ResFile
 from . import scene_utils
 from . import operators
 
 from bpy.app import translations
+
 _ = translations.pgettext
+
+
+class LIST_RES_MODELS(bpy.types.UIList):
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        if item:
+            layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+            layout.operator('object.model_select', text="✓").model_name = item.name
+            layout.operator('object.model_import', text='Import').model_name = item.name
+            # layout.operator('object.model_export', text="Export").model_name = item.name
+        else:
+            layout.label(text="", translate=False, icon_value=icon)
+        # if self.layout_type in {'DEFAULT', 'COMPACT'}:
+        # # 'GRID' layout type should be as compact as possible (typically a single icon!).
+        # elif self.layout_type == 'GRID':
+        #     layout.alignment = 'CENTER'
+        #     layout.label(text="", icon_value=icon)
+
+
+class LIST_RES_ANIMATIONS(bpy.types.UIList):
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            if item:
+                layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+                layout.operator('object.animation_select', text="✓").animation_name = item.name
+                layout.operator('object.animation_import', text="Import").animation_name = item.name
+                # layout.operator('object.animation_export')
+            else:
+                layout.label(text="", translate=False, icon_value=icon)
+        # 'GRID' layout type should be as compact as possible (typically a single icon!).
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon_value=icon)
 
 
 class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
@@ -34,27 +70,43 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         layout.label(text="Current RES:")
-        layout.label(text=str(context.scene.res_file), icon='FILE_FOLDER')
+        scene = context.scene
+        layout.label(text=str(scene.res_file), icon='FILE_FOLDER')
         for index in range(0, 3):
             row = layout.row()
             elem = row.split(factor=0.8)
-            elem.prop(context.scene, 'res_file_buffer%d' % index)
+            elem.prop(scene, 'res_file_buffer%d' % index)
             elem.operator('object.choose_resfile', text='...').res_file_index = index
             elem.operator('object.select_resfile', text="✓").res_file_index = index
-        layout.prop(context.scene, 'figmodel_name')
-        layout.prop(context.scene, 'mesh_mask')
-        mesh_mask = context.scene.mesh_mask
-        op_name = operators.CImport_OP_operator.get_name(mesh_mask)
-        layout.prop(context.scene, 'item_container_set')
-        layout.operator('object.model_import', text=op_name).mesh_mask = mesh_mask
+        # model list
+        row = layout.row()
+        icon = 'TRIA_DOWN' if scene.show_model_list else 'TRIA_RIGHT'
+        row.prop(scene, 'show_model_list', icon=icon, icon_only=True)
+        row.label(text="Models (.res)")
+        if scene.show_model_list:
+            layout.template_list("LIST_RES_MODELS", "", scene, "model_list", scene, "active_res_model")
+        ###
+        layout.prop(scene, 'figmodel_name')
+        layout.prop(scene, 'mesh_mask')
+        mesh_mask = scene.mesh_mask
+        op_name = operators.CModelImport.get_name(mesh_mask)
+        layout.prop(scene, 'item_container_set')
+        op_import = layout.operator('object.model_import',text=op_name)
+        op_import.model_name = context.scene.figmodel_name
+        op_import.mesh_mask = mesh_mask
+        # (scene.figmodel_name, mesh_mask)
         row = layout.split()
-        row.prop(context.scene, 'auto_fix')
-        row.prop(context.scene, 'ether')
-        row.prop(context.scene, 'is_export_unique', text="compact")
-        layout.prop(context.scene, 'is_ignore_without_morphs')
+        row.prop(scene, 'auto_fix')
+        row.prop(scene, 'ether')
+        row.prop(scene, 'is_export_unique', text="compact")
+        layout.prop(scene, 'is_ignore_without_morphs')
+        row = layout.row()
 
-        op_name = operators.CExport_OP_operator.get_name(mesh_mask)
-        layout.operator('object.model_export', text=op_name).mesh_mask = mesh_mask
+        op_name = operators.CModelExport.get_name(mesh_mask)
+        op_export = layout.operator('object.model_export', text=op_name)
+        op_export.model_name = context.scene.figmodel_name
+        op_export.mesh_mask = mesh_mask
+
         row = layout.row()
         row.operator('object.clear_scene', text='Clear scene')
         row.operator('object.repack_resfile')
@@ -178,16 +230,24 @@ class ANIMATION_PT_PANEL(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         # layout.label(text='Animations')
-        layout.prop(context.scene, 'animation_name')
-
-        layout.prop(context.scene, 'animsubfix')
-        layout.prop(context.scene, 'is_animation_to_new_collection')
-        use_collection = context.scene.animation_name if context.scene.is_animation_to_new_collection else "base"
-        label = _(operators.CAnimation_OP_import.bl_label) % use_collection
-        layout.operator('object.animation_import', text=label).target_collection = use_collection
-        layout.prop(context.scene, 'is_use_mesh_frame_range')
-        label = _(operators.CAnimation_OP_Export.bl_label) % use_collection
-        layout.operator('object.animation_export', text=label).target_collection = use_collection
+        scene = context.scene
+        # model list
+        row = layout.row()
+        icon = 'TRIA_DOWN' if scene.show_animation_list else 'TRIA_RIGHT'
+        row.prop(scene, 'show_animation_list', icon=icon, icon_only=True)
+        row.label(text="Animations (.res)")
+        if scene.show_animation_list:
+            layout.template_list("LIST_RES_ANIMATIONS", "", scene, "animation_list", scene, "active_res_animation")
+        ###
+        layout.prop(scene, 'animation_name')
+        layout.prop(scene, 'animsubfix')
+        layout.prop(scene, 'is_animation_to_new_collection')
+        target_collection = scene.animation_name if context.scene.is_animation_to_new_collection else "base"
+        label = _(operators.CAnimationImport.bl_label) % target_collection
+        layout.operator('object.animation_import', text=label)
+        layout.prop(scene, 'is_use_mesh_frame_range')
+        label = _(operators.CAnimationExport.bl_label) % target_collection
+        layout.operator('object.animation_export', text=label)
 
         donor, acceptor = scene_utils.get_donor_acceptor(context)
         layout.label(text=_("SRC: %s") % (donor.name if donor else None))
@@ -205,10 +265,10 @@ def outliner_mt_collection(self: bpy.types.OUTLINER_MT_collection, context):
     layout.separator()
     active_collection = context.view_layer.active_layer_collection
     active_collection_name = active_collection.name
-    label = _(operators.CAnimation_OP_import.bl_label) % active_collection_name
-    layout.operator('object.animation_import', text=label).target_collection = active_collection_name
-    label = _(operators.CAnimation_OP_Export.bl_label) % active_collection_name
-    layout.operator('object.animation_export', text=label).target_collection = active_collection_name
+    label = _(operators.CAnimationImport.bl_label) % active_collection_name
+    layout.operator('object.animation_import', text=label)
+    label = _(operators.CAnimationExport.bl_label) % active_collection_name
+    layout.operator('object.animation_export', text=label)
 
 
 def prepare_mesh_mask(context) -> str or None:
@@ -236,9 +296,19 @@ def outliner_mt_object(self: bpy.types.OUTLINER_MT_object, context):
         return
 
     layout.separator()
-    label = operators.CImport_OP_operator.get_name(mesh_mask)
+    label = operators.CModelImport.get_name(mesh_mask)
     layout.operator('object.model_import', text=label).mesh_mask = mesh_mask
-    label = operators.CExport_OP_operator.get_name(mesh_mask)
+    label = operators.CModelExport.get_name(mesh_mask)
     layout.operator('object.model_export', text=label).mesh_mask = mesh_mask
     label = operators.CAutoFillMorphNew_OP_Operator.get_name(mesh_mask)
     layout.operator('object.automorphnew', text=label).mesh_mask = mesh_mask
+
+
+def get_classes():
+    return (
+        LIST_RES_MODELS,
+        LIST_RES_ANIMATIONS,
+        IMPORT_EXPORT_PT_PANEL,
+        OPERATOR_PT_PANEL,
+        OPERATORMASS_PT_PANEL,
+        ANIMATION_PT_PANEL)

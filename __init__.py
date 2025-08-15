@@ -21,6 +21,7 @@ from bpy.utils import unregister_class
 from .locales import ru_ru
 from .locales import en_US
 
+from . import bone
 from . import UI_panel
 from . import animation
 from . import figure
@@ -35,7 +36,7 @@ from .properties import register_props, unregister_props
 bl_info = {
     'name': 'EI figer',
     'author': 'Konstvest/LostSoul/Asbestos',
-    'version': (6, 5),
+    'version': (6, 6),
     'blender': (3, 1, 0),
     'location': '',
     'description': 'Addon for import/export models and animations from Evil Islands game to Blender',
@@ -43,14 +44,13 @@ bl_info = {
     'tracker_url': 'https://github.com/alex-khod/ei_figer',
     'category': 'Import-Export'}
 
-bl_panels = (
-    UI_panel.IMPORT_EXPORT_PT_PANEL,
-    UI_panel.OPERATOR_PT_PANEL,
-    UI_panel.OPERATORMASS_PT_PANEL,
-    UI_panel.ANIMATION_PT_PANEL
-)
+importlib.reload(UI_panel)
+bl_panels = UI_panel.get_classes()
 
+importlib.reload(operators)
 bl_operators = (
+    operators.CAnimationSelect,
+    operators.CModelSelect,
     operators.CChooseResFile,
     operators.CSelectResFileIndex,
     operators.CAddMorphComp_OP_Operator,
@@ -59,14 +59,14 @@ bl_operators = (
     operators.CAutoFillMorphNew_OP_Operator,
     operators.CFixPos_OP_Operator,
     operators.CAutoFillMorphScaledOnly_OP_Operator,
-    operators.CImport_OP_operator,
-    operators.CAnimation_OP_import,
-    operators.CAnimation_OP_Export,
+    operators.CModelImport,
+    operators.CAnimationImport,
+    operators.CAnimationExport,
     operators.CAnimation_OP_BakeTransform,
-    operators.CExport_OP_operator,
+    operators.CModelExport,
     operators.CAutoFillMorph_OP_Operator,
     operators.CAnimation_OP_shapekey,
-    operators.CClear_OP_operator,
+    operators.CClearScene,
     operators.CRenameDropPostfix_OP_operator,
     operators.CAnimation_OP_UE4_Toolchain,
     operators.CDebugTestOperator,
@@ -84,6 +84,8 @@ def add_context_menu(self, operator_class):
 
 
 def reload_modules():
+    print('[init] Reload modules')
+
     importlib.reload(properties)
     importlib.reload(UI_panel)
     importlib.reload(operators)
@@ -92,6 +94,7 @@ def reload_modules():
     importlib.reload(scene_management)
     importlib.reload(animation)
     importlib.reload(figure)
+    importlib.reload(bone)
     importlib.reload(resfile)
 
     importlib.reload(ru_ru)

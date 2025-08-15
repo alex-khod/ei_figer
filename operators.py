@@ -17,6 +17,7 @@ import bpy
 import os
 import io
 import time
+from bpy import props
 from bpy_extras.io_utils import ImportHelper
 from . import bone
 from . import scene_utils
@@ -673,6 +674,39 @@ class CRepackResFile(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def populate_lists(context: bpy.types.Context):
+    populate_model_list(context)
+    populate_animation_list(context)
+
+
+def populate_model_list(context: bpy.types.Context):
+    res_path = context.scene.res_file
+    scene = context.scene
+    res = ResFile(res_path)
+    bpy.context.scene.model_list.clear()
+    files = res.get_model_list()
+    for file in files:
+        item = scene.model_list.add()
+        item.name = file
+
+
+def populate_animation_list(context: bpy.types.Context):
+    scene = context.scene
+    res_path = scene.res_file
+    res = ResFile(res_path)
+    scene.animation_list.clear()
+    model_name = scene.figmodel_name
+    try:
+        files = res.get_animation_list(model_name + ".anm")
+        print('anims', files)
+    except KeyError as e:
+        print(e)
+        files = []
+    for file in files:
+        item = scene.animation_list.add()
+        item.name = file
+
+
 class CSelectResFileIndex(bpy.types.Operator):
     bl_label = 'Select RES'
     bl_idname = 'object.select_resfile'
@@ -684,6 +718,7 @@ class CSelectResFileIndex(bpy.types.Operator):
 
     def execute(self, context):
         context.scene.res_file = scene_utils.get_res_file_buffer(self.res_file_index)
+        populate_lists(context)
         return {'FINISHED'}
 
 
@@ -718,7 +753,7 @@ class CChooseResFile(bpy.types.Operator, ImportHelper):
         return {'RUNNING_MODAL'}
 
 
-class CClear_OP_operator(bpy.types.Operator):
+class CClearScene(bpy.types.Operator):
     bl_label = 'Clear scene'
     bl_idname = 'object.clear_scene'
     bl_description = 'Should be pretty obvious'
@@ -731,21 +766,54 @@ class CClear_OP_operator(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class CImport_OP_operator(bpy.types.Operator):
+class CModelSelect(bpy.types.Operator):
+    bl_label = 'Select model'
+    bl_idname = 'object.model_select'
+    bl_description = 'Select model name'
+
+    model_name: bpy.props.StringProperty(name="Model name", default="", options={"HIDDEN"})
+
+    def execute(self, context):
+        scene = context.scene
+        scene.figmodel_name = self.model_name
+        populate_animation_list(context)
+        return {'FINISHED'}
+
+
+class CAnimationSelect(bpy.types.Operator):
+    bl_label = 'Select animation'
+    bl_idname = 'object.animation_select'
+    bl_description = 'Select animation name'
+
+    animation_name: bpy.props.StringProperty(name="Model name", default="", options={"HIDDEN"})
+
+    def execute(self, context):
+        scene = context.scene
+        scene.animation_name = self.animation_name
+        return {'FINISHED'}
+
+
+class CModelImport(bpy.types.Operator):
+    name_short = "Import"
     bl_label = 'Import %s meshes'
     bl_idname = 'object.model_import'
     bl_description = 'Import model/figure from selected RES into "base" collection.'
-
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
                                         description="Comma-separated include list of mesh names")
-
+    model_name: bpy.props.StringProperty(default="")
     get_name = classmethod(get_name)
 
     def null_result(self, res, model_name):
         item_list = res.get_model_list()
-        self.report({'ERROR'}, 'Can not find model %s.\nItems list:%s' % (model_name, item_list))
+        self.report({'ERROR'}, 'Cannot find model %s.\nItems list:%s' % (model_name, item_list))
         return {'CANCELLED'}
+
+    @classmethod
+    def get_model_name(cls, context):
+        scene = context.scene
+        model_name = scene.figmodel_name
+        return model_name
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing import model')
@@ -757,7 +825,7 @@ class CImport_OP_operator(bpy.types.Operator):
 
         reload_modules()
         res = ResFile(res_path)
-        model_name: bpy.props.StringProperty = bpy.context.scene.figmodel_name
+        model_name = self.model_name or self.get_model_name(context)
         if not model_name:
             self.report({'ERROR'}, 'Model/Figure name is empty')
             return self.null_result(res, model_name)
@@ -777,18 +845,25 @@ class CImport_OP_operator(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class CExport_OP_operator(bpy.types.Operator):
+class CModelExport(bpy.types.Operator):
     bl_label = 'Export %s meshes'
     bl_idname = 'object.model_export'
-    bl_description = ("Export models in base/morph collections into selected RES file, Evil Islands format (not Etherlords).\n"
-                      "NOTE: Export needs all eight morph collections in the scene.\n"
-                      "NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n")
+    bl_description = (
+        "Export models in base/morph collections into selected RES file, Evil Islands format (not Etherlords).\n"
+        "NOTE: Export needs all eight morph collections in the scene.\n"
+        "NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n")
 
     mesh_mask: bpy.props.StringProperty(name="Mesh mask",
                                         default="",
                                         description="Comma-separated include list of mesh names")
-
+    model_name: bpy.props.StringProperty(default="")
     get_name = classmethod(get_name)
+
+    @classmethod
+    def get_model_name(cls, context):
+        scene = context.scene
+        model_name = scene.figmodel_name
+        return model_name
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing export')
@@ -799,7 +874,7 @@ class CExport_OP_operator(bpy.types.Operator):
 
         reload_modules()
 
-        model_name: bpy.props.StringProperty = bpy.context.scene.figmodel_name
+        model_name = self.model_name or self.get_model_name(context)
         if not model_name:
             self.report({'ERROR'}, 'Model/Figure name is empty')
             return {'CANCELLED'}
@@ -832,11 +907,12 @@ class CExport_OP_operator(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class CAnimation_OP_import(bpy.types.Operator):
+class CAnimationImport(bpy.types.Operator):
     bl_label = 'Import animation into %s collection'
     bl_idname = 'object.animation_import'
     bl_description = 'Import animation and animate meshes in base collection, or its copy with new name'
 
+    animation_name: bpy.props.StringProperty(default="")
     target_collection: bpy.props.StringProperty(
         default="base",
         options={'HIDDEN'},
@@ -849,17 +925,24 @@ class CAnimation_OP_import(bpy.types.Operator):
         name = _(cls.bl_label) % use_collection
         return name
 
+    @classmethod
+    def get_target_collection(cls, context):
+        scene = context.scene
+        collection = scene.animation_name if scene.is_animation_to_new_collection else "base"
+        return collection
+
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation import')
+        scene = context.scene
 
-        res_path = bpy.context.scene.res_file
+        res_path = scene.res_file
         if not res_path or not os.path.exists(res_path):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
             return {'CANCELLED'}
 
         reload_modules()
-        anm_name = bpy.context.scene.animation_name
-        model_name = bpy.context.scene.figmodel_name
+        anm_name = self.animation_name or scene.animation_name
+        model_name = scene.figmodel_name
         res_file = ResFile(res_path)
 
         if not model_name:
@@ -877,7 +960,7 @@ class CAnimation_OP_import(bpy.types.Operator):
             self.report({'ERROR'}, 'Animation name is empty')
 
         if anm_name not in animations:  # set of animations
-            self.report({'ERROR'}, 'Can not find ' + anm_name + \
+            self.report({'ERROR'}, 'Cannot find ' + anm_name + \
                         '\nAnimation list: ' + str(animations))
             return {'CANCELLED'}
 
@@ -886,7 +969,7 @@ class CAnimation_OP_import(bpy.types.Operator):
             return {'CANCELLED'}
 
         # fix names for base collection being imported
-        animation_destination_name = self.target_collection
+        animation_destination_name = self.get_target_collection(context)
         self.report({'INFO'}, f'Importing into "{animation_destination_name}" collection')
 
         if animation_destination_name != "base":
@@ -915,7 +998,7 @@ class CAnimation_OP_import(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class CAnimation_OP_Export(bpy.types.Operator):
+class CAnimationExport(bpy.types.Operator):
     bl_label = 'Export animation from %s collection'
     bl_idname = 'object.animation_export'
     bl_description = ('Export animation in Evil islands format.\n'
@@ -923,20 +1006,27 @@ class CAnimation_OP_Export(bpy.types.Operator):
                       'May want to keep their morphs identical to base')
 
     target_collection: bpy.props.StringProperty(
-        default="base",
+        default=None,
         options={'HIDDEN'},
         maxlen=255, )
+
+    @classmethod
+    def get_target_collection(cls, context):
+        scene = context.scene
+        collection = scene.animation_name if scene.is_animation_to_new_collection else "base"
+        return collection
 
     def execute(self, context):
         self.report({'INFO'}, 'Executing animation export')
 
-        res_path = bpy.context.scene.res_file
+        scene = context.scene
+        res_path = scene.res_file
         if not res_path or not os.path.exists(res_path):
             self.report({'ERROR'}, 'Res file not found at:' + res_path)
             return {'CANCELLED'}
 
-        anm_name = bpy.context.scene.animation_name
-        model_name = bpy.context.scene.figmodel_name
+        anm_name = self.animation_name or scene.animation_name
+        model_name = scene.figmodel_name
         # resFile = ResFile(res_path)
 
         if not model_name:
@@ -949,7 +1039,7 @@ class CAnimation_OP_Export(bpy.types.Operator):
 
         reload_modules()
         # fix names for collection being exported
-        animation_source_name = self.target_collection
+        animation_source_name = self.target_collection or self.get_target_collection(context)
         self.report({'INFO'}, f'Exporting from "{animation_source_name}" collection')
         self.report({'INFO'}, f'Renaming .001-like names for "{animation_source_name}"')
         scene_utils.rename_drop_postfix(scene_utils.get_collection(animation_source_name).objects)
