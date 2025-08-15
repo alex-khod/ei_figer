@@ -29,7 +29,10 @@ class CBone(object):
     def read_bon(self, name, raw_data: bytearray):
         self.name = name
         parser = CByteReader(raw_data)
-        for _ in range(8):
+        size = len(raw_data)
+        is_old_bone = size == 72
+        morph_count = 6 if is_old_bone else 8
+        for _ in range(morph_count):
             self.pos.append(parser.read('fff'))
         return 0
 

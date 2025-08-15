@@ -131,24 +131,6 @@ def read_figure(fig_res: ResFile, fig_name: str):
     return err
 
 
-def read_figSignature(resFile: ResFile, model_name):
-    with resFile.open(model_name + '.mod') as meshes_container:
-        mesh_list_res = ResFile(meshes_container)
-        for fig_name in mesh_list_res.get_filename_list():
-            active_model: CModel = bpy.types.Scene.model
-            print(' fig_name for signature: ' + fig_name)
-            with fig_res.open(fig_name) as fig_res:
-                data = fig_res.read()
-                fig = CFigure()
-
-                parser = CByteReader(data)
-                signature = parser.read('ssss').decode()
-                if signature == 'FIG8':
-                    return 8
-                else:
-                    return 1
-
-
 def read_bone(bon_res: ResFile, bon_name: str):
     active_model: CModel = bpy.types.Scene.model
     err = 0
@@ -160,8 +142,8 @@ def read_bone(bon_res: ResFile, bon_name: str):
     return err
 
 
-def read_model(resFile: ResFile, model_name, include_meshes=None):
-    with resFile.open(model_name + '.mod') as meshes_container:
+def read_model(res_file: ResFile, model_name, include_meshes=None):
+    with res_file.open(model_name + '.mod') as meshes_container:
         mesh_list_res = ResFile(meshes_container)
         links_name = model_name
         links = read_links(mesh_list_res, links_name)
@@ -175,19 +157,19 @@ def read_model(resFile: ResFile, model_name, include_meshes=None):
         return links
 
 
-def read_bones(resFile: ResFile, model_name):
+def read_bones(res_file: ResFile, model_name):
     err = 0
     # bones container
-    with resFile.open(model_name + '.bon') as bone_container:
+    with res_file.open(model_name + '.bon') as bone_container:
         bone_list_res = ResFile(bone_container)
         for bone_name in bone_list_res.get_filename_list():
             err += read_bone(bone_list_res, bone_name)
     return err
 
 
-def read_animations(resFile: ResFile, model_name: str, animation_name: str) -> CAnimations:
+def read_animations(res_file: ResFile, model_name: str, animation_name: str) -> CAnimations:
     anm_list = []
-    with resFile.open(model_name + '.anm') as animation_container:
+    with res_file.open(model_name + '.anm') as animation_container:
         anm_res_file = ResFile(animation_container)
         with anm_res_file.open(animation_name) as animation_file:
             animation_res = ResFile(animation_file)
@@ -550,13 +532,10 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     vertex_indices = indexed_components[:, 0]
     vertex_indices = vertex_indices.reshape((n_tris, 3))
 
-    bEtherlord = bpy.context.scene.ether
-    if not bEtherlord:
-        mesh_count = item_group.morph_component_count
-    else:
-        mesh_count = 1
+    is_etherlord = bpy.context.scene.ether
+    mesh_count = figure.get_morph_count(figure.signature, is_etherlord)
 
-    print('create meshes for', figure.name)
+    print('create (n=%d) meshes for %s' % (mesh_count, figure.name))
 
     # mesh_uvs = np.array(figure.t_coords)
     mesh_uvs = figure.t_coords
@@ -1017,7 +996,7 @@ class ModelExporter:
             figure.name = obj.name
             if obj_count == 1:
                 figure.fill_vertices()
-                figure.fill_aux()
+                figure.fill_bounding_volume()
 
             MODEL().mesh_list.append(figure)
         return True

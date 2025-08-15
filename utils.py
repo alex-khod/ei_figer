@@ -43,6 +43,12 @@ class CByteReader:
         self._offset += size
         return value
 
+    def read_float32(self, quantity):
+        return self.read('%uf' % quantity)
+
+    def read_uint16(self, quantity):
+        return self.read('%uH' % quantity)
+
     def reset(self):
         self._offset = 0
 

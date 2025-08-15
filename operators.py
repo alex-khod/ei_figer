@@ -18,6 +18,7 @@ import os
 import io
 import time
 from bpy_extras.io_utils import ImportHelper
+from . import bone
 from . import scene_utils
 from . import figure
 from . import utils as fig_utils
@@ -53,6 +54,7 @@ def get_name(cls, mesh_mask):
 
 
 def reload_modules():
+    importlib.reload(bone)
     importlib.reload(scene_utils)
     importlib.reload(figure)
     importlib.reload(fig_utils)
