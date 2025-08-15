@@ -14,6 +14,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 from struct import pack, unpack
+
 from .utils import CByteReader
 
 

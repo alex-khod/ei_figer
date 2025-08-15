@@ -10,14 +10,15 @@
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
 
+from struct import pack
+
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import os
 import bpy
 import numpy as np
-from struct import pack, unpack
 from mathutils import Quaternion
-from .utils import read_xyzw, write_xyzw, read_xyz, write_xyz, CByteReader
+
+from .utils import CByteReader
 
 
 class CAnimation(object):

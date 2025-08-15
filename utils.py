@@ -1,25 +1,25 @@
 # Copyright (c) 2022 konstvest
+import hashlib  # for md5
+import re
 import struct
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from argparse import ArgumentError
+from struct import pack, unpack
+
+import bpy
+import numpy as np
+
+
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
-
 #    This program is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
 
-#    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from argparse import ArgumentError
-import re
-import hashlib  # for md5
-from struct import pack, unpack
-
-import bpy
-import numpy as np
-import re
 
 class CByteReader:
     def __init__(self, raw_data):
@@ -85,67 +85,61 @@ class CItemGroup:
 
 
 ITEM_GROUPS_JABAIS_VOUX = [
-    CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 0, 19, 8, 1)
-    , CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 0, 18, 8, 1)
-    # ,CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1)
-    ,
-    CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 0, 18, 8, 1)
-    # ,CItemGroup('shop weapons/armors2', re.compile(r'armor\D+'), 1, 18, 8, 1)
-    , CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1)
-    , CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1)
-    # ,CItemGroup('weapons',          re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18, 2, 8)
-    # ,CItemGroup('weapons left', re.compile(r'(lh3\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0))
-    # ,CItemGroup('weapons right',   re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0))
-    # ,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
-    # ,CItemGroup('shield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(0, 0))
+    CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 0, 19, 8, 1),
+    CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 0, 18, 8, 1),
+    CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 0, 18, 8, 1),
+    CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1),
+    CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1),
+    # CItemGroup('weapons', re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18, 2, 8),
+    # CItemGroup('weapons left', re.compile(r'(lh3\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0)),
+    # CItemGroup('weapons right', re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0)),
+    # CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0)),
+    # CItemGroup('shield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(0, 0)),
 
-    , CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 1, 19, 2, 8)
-    , CItemGroup('archery', re.compile(r'(\.(crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8)
-    ,
-    CItemGroup('archery2', re.compile(r'(\.(crbow..part|bw..part\D+)|^crbow..part|^bw..part\D+)\d+'), 1, 18, 2,
-               8)
-    , CItemGroup('shield', re.compile(r'lh2\.axe\d+'), 1, 18, 2, 8)
-    , CItemGroup('exshield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(1, 1))
-    , CItemGroup('staffleft', re.compile(r'lh3\.staff\D+'), 1, 18, 2, 8, uv_base=(1, 1))
-    , CItemGroup('stafflefttwo', re.compile(r'lh3\.dstaff\D+'), 1, 18, 2, 8, uv_base=(1, 1))
-    , CItemGroup('staffright', re.compile(r'rh3\.staff\D+'), 1, 18, 2, 8)
-    , CItemGroup('staffrighttwo', re.compile(r'rh3\.dstaff\D+'), 1, 18, 2, 8)
-    , CItemGroup('weapons left', re.compile(
+    CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 1, 19, 2, 8),
+    CItemGroup('archery', re.compile(r'(\.(crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8),
+    CItemGroup('archery2', re.compile(r'(\.(crbow..part|bw..part\D+)|^crbow..part|^bw..part\D+)\d+'), 1, 18, 2, 8),
+    CItemGroup('shield', re.compile(r'lh2\.axe\d+'), 1, 18, 2, 8),
+    CItemGroup('exshield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(1, 1)),
+    CItemGroup('staffleft', re.compile(r'lh3\.staff\D+'), 1, 18, 2, 8, uv_base=(1, 1)),
+    CItemGroup('stafflefttwo', re.compile(r'lh3\.dstaff\D+'), 1, 18, 2, 8, uv_base=(1, 1)),
+    CItemGroup('staffright', re.compile(r'rh3\.staff\D+'), 1, 18, 2, 8),
+    CItemGroup('staffrighttwo', re.compile(r'rh3\.dstaff\D+'), 1, 18, 2, 8),
+    CItemGroup('weapons left', re.compile(
         r'(lh3\.(pike|dpike|sword|dsword|dagger|club|dclub|axe|daxe|staff|dstaff|shit1|shit2\D+)|^shit1|^shit2\D+)\d+'),
-                 1, 18, 2, 8, uv_base=(1, 1))
-    , CItemGroup('weapons', re.compile(
-        r'(\.(pike|dpike|sword|dsword|dagger|club|dclub|axe|daxe|staff|dstaff|crbow|bw\D+)|^crbow|^bw\D+)\d+'),
-                 1, 18, 2, 8)
-    , CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
+               1, 18, 2, 8, uv_base=(1, 1)),
+    CItemGroup('weapons', re.compile(
+        r'(\.(pike|dpike|sword|dsword|dagger|club|dclub|axe|daxe|staff|dstaff|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18,
+               2, 8),
+    CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0)),
+    # CItemGroup('weapons left', re.compile(r'((lh3.pike|lh3.sword|lh3.dagger|lh3.2axe|lh3.club|lh3.axe|lh3.crbow|bw\D+)|^lh3.crbow|^lh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1)),
+    # CItemGroup('weapons',   re.compile(r'((rh3.pike|rh3.sword|rh3.dagger|rh3.2axe|rh3.club|rh3.axe|rh3.crbow|rh3.bw\D+)|^rh3.crbow|^rh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1)),
+    # CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0)),
+    # CItemGroup('shield', re.compile(r'lh2.shield\d+'), 1, 18, 2, 8, uv_base=(1, 0)),
 
-    # ,CItemGroup('weapons left', re.compile(r'((lh3.pike|lh3.sword|lh3.dagger|lh3.2axe|lh3.club|lh3.axe|lh3.crbow|bw\D+)|^lh3.crbow|^lh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1))
-    # ,CItemGroup('weapons',   re.compile(r'((rh3.pike|rh3.sword|rh3.dagger|rh3.2axe|rh3.club|rh3.axe|rh3.crbow|rh3.bw\D+)|^rh3.crbow|^rh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1))
-    # ,CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0))
-    # ,CItemGroup('shield', re.compile(r'lh2.shield\d+'), 1, 18, 2, 8, uv_base=(1, 0))
-
-    , CItemGroup('armr', re.compile(r'\.armor\d+'), 0, 19, 1, 8)
-    , CItemGroup('unit', re.compile(r'un(an|mo|hu|or|sk).+'), 0, 19, 1, 8)
-    , CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8)  # LAST
+    CItemGroup('armor', re.compile(r'\.armor\d+'), 0, 19, 1, 8),
+    CItemGroup('unit', re.compile(r'un(an|mo|hu|or|sk).+'), 0, 19, 1, 8),
+    CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8)  # LAST
 ]
 
 ITEM_GROUPS_VANILLA = [
-    CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 2, 19, 8, 1)
-    , CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 1, 18, 8, 1)
-    , CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1)
-    , CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1)
-    , CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1)
-    , CItemGroup('helms', re.compile(r'hd\.armor\d+'), 0, 19, 2, 8)
-    , CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 0, 19, 2, 8)
-    , CItemGroup('weapons', re.compile(r'(\.(pike|sword|dagger|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18, 2, 8)
-    , CItemGroup('armor', re.compile(r'\.armor\d+'), 0, 19, 1, 8)
-    , CItemGroup('unit', re.compile(r'un(an|mo|hu|or).+'), 0, 19, 1, 8)
-    , CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8)  # LAST
+    CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 2, 19, 8, 1),
+    CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 1, 18, 8, 1),
+    CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1),
+    CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1),
+    CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1),
+    CItemGroup('helms', re.compile(r'hd\.armor\d+'), 0, 19, 2, 8),
+    CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 0, 19, 2, 8),
+    CItemGroup('weapons',
+               re.compile(r'(\.(pike|sword|dagger|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18,
+               2, 8),
+    CItemGroup('armor', re.compile(r'\.armor\d+'), 0, 19, 1, 8),
+    CItemGroup('unit', re.compile(r'un(an|mo|hu|or).+'), 0, 19, 1, 8),
+    CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8)  # LAST
 ]
 
-ITEM_SET_CHOICES = {
-    "VANILLA": ITEM_GROUPS_VANILLA,
-    "JABAIS_VOUX": ITEM_GROUPS_JABAIS_VOUX
-}
+ITEM_SET_CHOICES = {"VANILLA": ITEM_GROUPS_VANILLA, "JABAIS_VOUX": ITEM_GROUPS_JABAIS_VOUX}
+
 
 class CItemGroupContainer:
     def __init__(self):
@@ -245,30 +239,22 @@ def calculate_unique_component(ei_, comp):
     temp = [0, 0, 0]
 
     for xyz in range(3):
-        temp[xyz] = (ei_.center[comp - 1][xyz] + \
-                     ei_.center[comp - 2][xyz] - \
-                     ei_.center[comp - 3][xyz])
+        temp[xyz] = (ei_.center[comp - 1][xyz] + ei_.center[comp - 2][xyz] - ei_.center[comp - 3][xyz])
     ei_.center[comp] = tuple(temp)
 
     for xyz in range(3):
-        temp[xyz] = (ei_.fmin[comp - 1][xyz] + \
-                     ei_.fmin[comp - 2][xyz] - \
-                     ei_.fmin[comp - 3][xyz])
+        temp[xyz] = (ei_.fmin[comp - 1][xyz] + ei_.fmin[comp - 2][xyz] - ei_.fmin[comp - 3][xyz])
     ei_.fmin[comp] = tuple(temp)
 
     for xyz in range(3):
-        temp[xyz] = (ei_.fmax[comp - 1][xyz] + \
-                     ei_.fmax[comp - 2][xyz] - \
-                     ei_.fmax[comp - 3][xyz])
+        temp[xyz] = (ei_.fmax[comp - 1][xyz] + ei_.fmax[comp - 2][xyz] - ei_.fmax[comp - 3][xyz])
     ei_.fmax[comp] = tuple(temp)
 
     ei_.radius[comp] = (ei_.radius[comp - 1] + ei_.radius[comp - 2] - ei_.radius[comp - 3])
 
     for i in range(len(ei_.verts[0])):
         for xyz in range(3):
-            temp[xyz] = (ei_.verts[comp - 1][i][xyz] + \
-                         ei_.verts[comp - 2][i][xyz] - \
-                         ei_.verts[comp - 3][i][xyz])
+            temp[xyz] = (ei_.verts[comp - 1][i][xyz] + ei_.verts[comp - 2][i][xyz] - ei_.verts[comp - 3][i][xyz])
         ei_.verts[comp].append(tuple(temp))
 
 

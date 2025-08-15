@@ -13,11 +13,12 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import bpy
-from bpy.utils import register_class, unregister_class
 from bpy import props
-from .scene_utils import calculate_mesh
-from .scene_management import CModel
 from bpy.app import translations
+from bpy.utils import register_class, unregister_class
+
+from .scene_management import CModel
+from .scene_utils import calculate_mesh
 
 # from typing import TYPE_CHECKING
 

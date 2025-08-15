@@ -1,35 +1,34 @@
 # Copyright (c) 2022 konstvest
 import importlib
+import os
+import time
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import bpy
+from bpy import props
+from bpy_extras.io_utils import ImportHelper
+
+from . import animation
+from . import bone
+from . import figure
+from . import resfile
+from . import scene_management
+from . import scene_utils
+from . import utils as fig_utils
+from .bone import CBone
+from .figure import CFigure
+from .links import CLink
+from .scene_utils import MODEL, clear_unlinked_data
 
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
-
 #    This program is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
-
-#    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import bpy
-import os
-import io
-import time
-from bpy import props
-from bpy_extras.io_utils import ImportHelper
-from . import bone
-from . import scene_utils
-from . import figure
-from . import utils as fig_utils
-from . import scene_management
-from . import animation
-from . import resfile
-from .figure import CFigure
-from .bone import CBone
-from .links import CLink
-from .scene_utils import MODEL, clear_unlinked_data
 
 ResFile = resfile.ResFile
 
@@ -84,8 +83,9 @@ class CRefreshTestTable(bpy.types.Operator):
 
         # find base objects
         for obj in bpy.data.objects:
-            if obj.name in context.scene.collection.children[bpy.types.Scene.model.morph_collection[0]].objects and \
-                    not obj.hide_get() and obj.name[0:2] not in bpy.types.Scene.model.morph_comp:
+            if obj.name in context.scene.collection.children[
+                bpy.types.Scene.model.morph_collection[0]].objects and not obj.hide_get() and obj.name[
+                                                                                              0:2] not in bpy.types.Scene.model.morph_comp:
                 bpy.types.Scene.model.mesh_list.append(bpy.types.Scene.model.morph_comp[8] + obj.data.name)
                 bpy.types.Scene.model.pos_lost.append(bpy.types.Scene.model.morph_comp[8] + obj.name)
                 if obj.parent is None:
@@ -484,8 +484,8 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
                 for child, parent in links.items():
                     if parent is None:
                         continue
-                    bpy.data.objects[MODEL().morph_comp[i] + child].parent = \
-                        bpy.data.objects[MODEL().morph_comp[i] + parent]
+                    bpy.data.objects[MODEL().morph_comp[i] + child].parent = bpy.data.objects[
+                        MODEL().morph_comp[i] + parent]
 
         return {'FINISHED'}
 
@@ -497,8 +497,7 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
                      'NOTE: applies R&S transforms to base collection ' \
                      'which may break animation or model parent-child positioning'
 
-    mesh_mask: bpy.props.StringProperty(name="Mesh mask",
-                                        default="",
+    mesh_mask: bpy.props.StringProperty(name="Mesh mask", default="",
                                         description="Comma-separated include list of mesh names")
 
     get_name = classmethod(get_name)
@@ -712,9 +711,7 @@ class CSelectResFileIndex(bpy.types.Operator):
     bl_idname = 'object.select_resfile'
     bl_description = 'Select this res file'
 
-    res_file_index: bpy.props.IntProperty(
-        default=0, options={'HIDDEN'},
-    )
+    res_file_index: bpy.props.IntProperty(default=0, options={'HIDDEN'}, )
 
     def execute(self, context):
         context.scene.res_file = scene_utils.get_res_file_buffer(self.res_file_index)
@@ -733,15 +730,11 @@ class CChooseResFile(bpy.types.Operator, ImportHelper):
 
     filename_ext = ".res"
 
-    filter_glob: bpy.props.StringProperty(
-        default="*.res",
-        options={'HIDDEN'},
-        maxlen=255,  # Max internal buffer length, longer would be clamped.
-    )
+    filter_glob: bpy.props.StringProperty(default="*.res", options={'HIDDEN'}, maxlen=255,
+                                          # Max internal buffer length, longer would be clamped.
+                                          )
 
-    res_file_index: bpy.props.IntProperty(
-        default=0, options={'HIDDEN'},
-    )
+    res_file_index: bpy.props.IntProperty(default=0, options={'HIDDEN'}, )
 
     def execute(self, context):
         scene_utils.set_res_file_buffer(self.res_file_index, self.filepath)
@@ -798,8 +791,7 @@ class CModelImport(bpy.types.Operator):
     bl_label = 'Import %s meshes'
     bl_idname = 'object.model_import'
     bl_description = 'Import model/figure from selected RES into "base" collection.'
-    mesh_mask: bpy.props.StringProperty(name="Mesh mask",
-                                        default="",
+    mesh_mask: bpy.props.StringProperty(name="Mesh mask", default="",
                                         description="Comma-separated include list of mesh names")
     model_name: bpy.props.StringProperty(default="")
     get_name = classmethod(get_name)
@@ -853,8 +845,7 @@ class CModelExport(bpy.types.Operator):
         "NOTE: Export needs all eight morph collections in the scene.\n"
         "NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n")
 
-    mesh_mask: bpy.props.StringProperty(name="Mesh mask",
-                                        default="",
+    mesh_mask: bpy.props.StringProperty(name="Mesh mask", default="",
                                         description="Comma-separated include list of mesh names")
     model_name: bpy.props.StringProperty(default="")
     get_name = classmethod(get_name)
@@ -913,10 +904,7 @@ class CAnimationImport(bpy.types.Operator):
     bl_description = 'Import animation and animate meshes in base collection, or its copy with new name'
 
     animation_name: bpy.props.StringProperty(default="")
-    target_collection: bpy.props.StringProperty(
-        default="base",
-        options={'HIDDEN'},
-        maxlen=255, )
+    target_collection: bpy.props.StringProperty(default="base", options={'HIDDEN'}, maxlen=255, )
 
     @classmethod
     def get_name(cls):
@@ -960,8 +948,7 @@ class CAnimationImport(bpy.types.Operator):
             self.report({'ERROR'}, 'Animation name is empty')
 
         if anm_name not in animations:  # set of animations
-            self.report({'ERROR'}, 'Cannot find ' + anm_name + \
-                        '\nAnimation list: ' + str(animations))
+            self.report({'ERROR'}, 'Cannot find ' + anm_name + '\nAnimation list: ' + str(animations))
             return {'CANCELLED'}
 
         if not scene_utils.get_collection("base"):
@@ -1005,10 +992,7 @@ class CAnimationExport(bpy.types.Operator):
                       'NOTE: Morphing/shapekey (in original dragon/bat wings) animations run on top of base model\n'
                       'May want to keep their morphs identical to base')
 
-    target_collection: bpy.props.StringProperty(
-        default=None,
-        options={'HIDDEN'},
-        maxlen=255, )
+    target_collection: bpy.props.StringProperty(default=None, options={'HIDDEN'}, maxlen=255, )
 
     @classmethod
     def get_target_collection(cls, context):
@@ -1052,8 +1036,8 @@ class CAnimationExport(bpy.types.Operator):
             frame_range = context.scene.frame_start, context.scene.frame_end
 
         self.report({'INFO'}, f'Exporting frames from {frame_range[0]} to {frame_range[1]}')
-        _, duration = call_with_time(lambda: scene_utils.export_animation(context, frame_range, animation_source_name,
-                                                                          res_path))
+        _, duration = call_with_time(
+            lambda: scene_utils.export_animation(context, frame_range, animation_source_name, res_path))
 
         self.report({'INFO'}, f'Done in {duration:.2f} sec')
         return {'FINISHED'}

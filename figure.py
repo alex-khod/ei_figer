@@ -16,10 +16,9 @@
 import struct
 
 import bpy
+import numpy as np
 
 from . import utils as fig_utils
-
-import numpy as np
 
 
 class CFigureHeader:

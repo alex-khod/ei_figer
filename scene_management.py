@@ -1,5 +1,4 @@
 # Copyright (c) 2022 konstvest
-import bpy
 
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -13,13 +12,12 @@ import bpy
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from .links import CLink
 from .animation import CAnimation
-from .figure import CFigure
 from .bone import CBone
+from .figure import CFigure
 
 
-class CAnimations():
+class CAnimations:
     def __init__(self, anm_list):
         self.anm_list: list[CAnimation] = anm_list
 

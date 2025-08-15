@@ -13,24 +13,23 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import bpy
 import importlib
+
+import bpy
 from bpy.utils import register_class
 from bpy.utils import unregister_class
 
-from .locales import ru_ru
-from .locales import en_US
-
-from . import bone
 from . import UI_panel
 from . import animation
+from . import bone
 from . import figure
 from . import operators
-from . import scene_management
-from . import resfile
-# for reloading
-from . import scene_utils
 from . import properties
+from . import resfile
+from . import scene_management
+from . import scene_utils
+from .locales import en_US
+from .locales import ru_ru
 from .properties import register_props, unregister_props
 
 bl_info = {

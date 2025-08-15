@@ -1,42 +1,38 @@
 # Copyright (c) 2022 konstvest
+import collections as py_collections
+import copy as cp
 import importlib
+import io
 import typing
+from typing import Set, Tuple
+
+import bmesh
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import bpy
+import numpy as np
+from mathutils import Quaternion, Vector, Matrix, Euler
+
+from . import figure
+from . import resfile
+from . import utils as fig_utils
+from .bone import CBone
+from .utils import subVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
 
 # This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
-
 #    This program is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
-
-#    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import bpy
-import bmesh
-import copy
-import io
-from math import sqrt
-from mathutils import Quaternion, Vector, Matrix, Euler
-import copy as cp
-import collections as py_collections
-from typing import Set, Tuple, List
-import numpy as np
-
-from .utils import subVector, sumVector, CItemGroupContainer, CItemGroup, mulVector, sumVector
-from . import utils as fig_utils
-from .bone import CBone
-from . import figure
-from . import resfile
 
 CFigure = figure.CFigure
 from .resfile import ResFile
 from .scene_management import CModel, CAnimations
 from .animation import CAnimation
 from .links import CLink
-from .utils import CByteReader
 
 profilehooks = None
 try:
@@ -522,7 +518,6 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
 
     print('head', figure.header)
     print('head', figure.header[3])
-
 
     indexes = figure.indicies[:n_indices]
     n_tris = n_indices // 3
