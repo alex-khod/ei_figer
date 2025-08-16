@@ -143,6 +143,8 @@ class CFigure(object):
             return 6
         elif signature == 'FIG4':
             return 4
+        elif signature == 'FIG1':
+            return 1
         else:
             # old fig6
             return 6
@@ -166,7 +168,7 @@ class CFigure(object):
         print('signature', signature)
         if signature != 'FIG8':
             print(self.name + ' has not FIG8 figure signature: %s (0x%s)' % (signature, signature.encode().hex()))
-        is_etherlord = bpy.context.scene.ether
+        is_etherlord = bpy.context.scene.is_etherlord
         self.morph_count = self.get_morph_count(signature, is_etherlord)
 
         if self.is_old_fig6(signature):

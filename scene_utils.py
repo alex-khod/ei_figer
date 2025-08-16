@@ -193,8 +193,8 @@ def import_mod_file(res_file, model_name, include_meshes=None):
     active_model.name = model_name
 
     model_links = read_model(res_file, model_name, include_meshes)
-    bEtherlord = bpy.context.scene.ether
-    if not bEtherlord:
+    is_etherlord = bpy.context.scene.is_etherlord
+    if not is_etherlord:
         read_bones(res_file, model_name)
     create_model_meshes(model_links)
 
@@ -521,7 +521,7 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     vertex_indices = indexed_components[:, 0]
     vertex_indices = vertex_indices.reshape((n_tris, 3))
 
-    is_etherlord = bpy.context.scene.ether
+    is_etherlord = bpy.context.scene.is_etherlord
     morph_count = figure.get_morph_count(figure.signature, is_etherlord)
 
     print('create (n=%d) meshes for %s' % (morph_count, figure.name))
@@ -635,8 +635,8 @@ def insert_animation(to_collection: str, anm_list: CAnimations):
             obj.rotation_quaternion = anim.rotations[frame]
             obj.keyframe_insert(data_path='rotation_quaternion', frame=frame, index=-1)
 
-        bEtherlord = bpy.context.scene.ether
-        if bEtherlord or obj.parent is None:
+        is_etherlord = bpy.context.scene.is_etherlord
+        if is_etherlord or obj.parent is None:
             for frame in range(len(anim.translations)):
                 obj.location = anim.translations[frame]
                 obj.keyframe_insert(data_path='location', frame=frame, index=-1)
@@ -712,8 +712,8 @@ def collect_animations(frame_range: Tuple[int, int], collection_name="base"):
             bpy.context.scene.frame_set(frame)  # choose frame
             anm.rotations.append(Quaternion(obj.rotation_quaternion))
             # positions
-            bEtherlord = bpy.context.scene.ether
-            if not bEtherlord:
+            is_etherlord = bpy.context.scene.is_etherlord
+            if not is_etherlord:
                 print('object ' + anm.name + ' loc is ' + str(obj.location))
                 if obj.parent is None:  # root
                     anm.translations.append(obj.location.copy())
@@ -806,7 +806,7 @@ def is_model_correct(model_name):
     if bad_objects and not bpy.context.scene.is_ignore_without_morphs:
         return False
 
-    # bEtherlord = bpy.context.scene.ether
+    # is_etherlord = bpy.context.scene.is_etherlord
 
     root_list = []
     base_coll = get_collection()

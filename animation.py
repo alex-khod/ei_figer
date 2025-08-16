@@ -58,8 +58,8 @@ class CAnimation(object):
         translations = [(parser.read('fff')) for _ in range(trans_count)]
         self.translations = translations
 
-        bEtherlord = bpy.context.scene.ether
-        if bEtherlord:
+        is_etherlord = bpy.context.scene.is_etherlord
+        if is_etherlord:
             scale_count = parser.read('L')
             print('scale_count', scale_count)
             scalings = [parser.read('fff') for _ in range(scale_count)]
@@ -104,8 +104,8 @@ class CAnimation(object):
             translations = translations[:, [0, 1, 2]]
         self.translations = translations
 
-        bEtherlord = bpy.context.scene.ether
-        if bEtherlord:
+        is_etherlord = bpy.context.scene.is_etherlord
+        if is_etherlord:
             scale_count = parser.read('H')
             print('scale_count', scale_count)
             scalings = [parser.read('fff') for _ in range(scale_count)]

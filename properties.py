@@ -274,7 +274,7 @@ Can be useful if you get unexpected scaling, rotations or holes. It can decrease
         description='Unique scaled collection',
         default=False
     )
-    scene.ether = props.BoolProperty(
+    scene.is_etherlord = props.BoolProperty(
         name='ether',
         description='For Etherlords FIG1 models and animation import.',
         default=False
