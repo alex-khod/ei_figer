@@ -104,6 +104,14 @@ class CFigure(object):
         self.m_c = []
         self.morph_count = 8
 
+    def __str__(self):
+        text = "<CFigure: %s>" % self.name
+        return text
+
+    def __repr__(self):
+        text = "<CFigure: %s>" % self.name
+        return text
+
     def __eq__(self, other):
         if not isinstance(other, CFigure):
             # don't attempt to compare against unrelated types
@@ -215,6 +223,7 @@ class CFigure(object):
 
     def write_fig(self):
         header = self.header
+        print('[write-fig]', self.name)
         if len(self.normals) != header.normal_count * 4:  # normal count * block_size(4)
             print('normals count corrupted')
         if len(self.t_coords) != header.texcoord_count:

@@ -12,15 +12,21 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from struct import pack, unpack
-
+import struct
 from .utils import CByteReader
 
 
 class CLink:
     def __init__(self):
-        self.root = ''
+        # [child] = parent graph
         self.links = dict()
+
+    def __str__(self):
+        return "<Clink: %s>" % self.links.__str__()
+
+    def get_roots(self):
+        roots = [k for k, v in  filter(lambda k, v: v is None, self.links.items())]
+        return roots
 
     def read_lnk(self, raw_data: bytearray):
         parser = CByteReader(raw_data)
@@ -31,7 +37,6 @@ class CLink:
             part_len = parser.read('i')
             if part_len == 0:
                 self.links[part] = None
-                self.root = part
             else:
                 parent = parser.read(part_len * 's').decode().rstrip('\x00')
                 self.links[part] = parent
@@ -41,75 +46,24 @@ class CLink:
         return 1
 
     def write_lnk(self):
+        pack = struct.pack
         raw_data = b''
-        # root
         raw_data += pack('i', len(self.links.keys()))
-        data = self.root.encode() + b'\x00'
-        raw_data += pack('i', len(data))
-        raw_data += pack(str(len(data)) + 's', data)
-        # add empty parent for root
-        raw_data += pack('i', 0)
-        for key, value in self.links.items():
-            if value is None:
-                continue  # root
-            data = key.encode() + b'\x00'
-            raw_data += pack('i', len(data))
-            raw_data += pack(str(len(data)) + 's', data)
-            data = value.encode() + b'\x00'
-            raw_data += pack('i', len(data))
-            raw_data += pack(str(len(data)) + 's', data)
+
+        def write_fixed_string(_str: str):
+            encoded = _str.encode() + b'\x00'
+            data = b'' + pack('i', len(encoded))
+            data += pack('%us' % len(encoded), encoded)
+            return data
+
+        for parent, child in self.links.items():
+            raw_data += write_fixed_string(parent)
+            if child is None:
+                raw_data += pack('i', 0)
+            else:
+                raw_data += write_fixed_string(child)
+
+        print(raw_data)
 
         return raw_data
 
-    def import_lnk(self, lnkpath):
-        '''
-        Reads EI link file (links beetween model parts)
-        '''
-        file = open(lnkpath, 'rb')
-        link_number = unpack('i', file.read(4))[0]
-        for _ in range(link_number):
-            tmp1 = unpack('i', file.read(4))[0]
-            child = unpack(str(tmp1 - 1) + 's', file.read(tmp1 - 1))[0].decode()
-            file.read(1)
-            tmp1 = unpack('i', file.read(4))[0]
-            if tmp1 == 0:
-                self.links[child] = None
-                self.root = child
-            else:
-                parent = unpack(str(tmp1 - 1) + 's', file.read(tmp1 - 1))[0].decode()
-                file.read(1)
-                self.links[child] = parent
-        file.close()
-        return
-
-    def export_lnk(self, lnk_path):
-        """
-        Writes EI link file (links beetween model parts)
-        """
-        if not self.links:
-            return 1
-
-        with open(lnk_path, 'wb') as lnk_file:
-            # write root mesh
-            lnk_file.write(pack('i', len(self.links.keys())))
-            str_format = str(len(self.root + 'a')) + 's'
-            lnk_file.write(pack('i', len(self.root) + 1))
-            lnk_file.write(pack(str_format, self.root.encode()))
-            lnk_file.write(pack('i', 0))
-
-            # write parts
-            for key, value in self.links.items():
-                if key == self.root:
-                    continue
-
-                lnk_file.write(pack('i', len(key) + 1))
-                lnk_file.write(pack(str(len(key) + 1) + 's', key.encode()))
-                lnk_file.write(pack('i', len(value) + 1))
-                lnk_file.write(pack(str(len(value) + 1) + 's', value.encode()))
-
-        return 0
-
-    def add(self, child, parent):
-        self.links[child] = parent
-        if parent is None:
-            self.root = child

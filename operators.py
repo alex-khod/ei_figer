@@ -11,6 +11,7 @@ from bpy_extras.io_utils import ImportHelper
 
 from . import animation
 from . import bone
+from . import links
 from . import figure
 from . import resfile
 from . import scene_management
@@ -56,6 +57,7 @@ def get_name(cls, mesh_mask):
 def reload_modules():
     importlib.reload(bone)
     importlib.reload(scene_utils)
+    importlib.reload(links)
     importlib.reload(figure)
     importlib.reload(fig_utils)
     importlib.reload(scene_management)

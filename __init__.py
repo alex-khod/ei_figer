@@ -23,6 +23,7 @@ from . import UI_panel
 from . import animation
 from . import bone
 from . import figure
+from . import links
 from . import operators
 from . import properties
 from . import resfile
@@ -94,6 +95,7 @@ def reload_modules():
     importlib.reload(animation)
     importlib.reload(figure)
     importlib.reload(bone)
+    importlib.reload(links)
     importlib.reload(resfile)
 
     importlib.reload(ru_ru)

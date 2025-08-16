@@ -247,7 +247,7 @@ def create_model_meshes(links: CLink, include_meshes=None):
     for i, fig in enumerate(active_model.mesh_list):
         bpy.context.window_manager.progress_update(30 + (i / len_meshes * 50))
         create_mesh_2(fig, item_group)
-    create_links_2(links, item_group.morph_component_count)
+    create_links_2(links, item_group)
     for bone in active_model.pos_list:
         morph_count = container.get_item_group(bone.name).morph_component_count
         set_pos_2(bone, morph_count)
@@ -522,9 +522,9 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     vertex_indices = vertex_indices.reshape((n_tris, 3))
 
     is_etherlord = bpy.context.scene.ether
-    mesh_count = figure.get_morph_count(figure.signature, is_etherlord)
+    morph_count = figure.get_morph_count(figure.signature, is_etherlord)
 
-    print('create (n=%d) meshes for %s' % (mesh_count, figure.name))
+    print('create (n=%d) meshes for %s' % (morph_count, figure.name))
 
     # mesh_uvs = np.array(figure.t_coords)
     mesh_uvs = figure.t_coords
@@ -533,7 +533,7 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     assert len(uvs) == figure.header[3]
     uvs_flat = uvs.flatten()
 
-    for i in range(mesh_count):
+    for i in range(morph_count):
         collection_name = active_model.morph_collection[i]
         collection = get_collection(collection_name)
         name = active_model.morph_comp[i] + figure.name
@@ -550,7 +550,6 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
         base_obj.location = (0, 0, 0)
         collection.objects.link(base_obj)
         tris_mesh_from_pydata(mesh, figure.verts[i], vertex_indices)
-        # mesh.from_pydata(figure.verts[i], [], vertex_indices)
         mesh.uv_layers.new(name=bpy.context.scene.model.name)
         mesh.uv_layers[0].data.foreach_set('uv', uvs_flat)
         # custom prop
@@ -570,12 +569,14 @@ def set_pos_2(bone: CBone, morph_count):
     return 0
 
 
-def create_links_2(link: CLink, obj_count=1):
+def create_links_2(link: CLink, item_group: CItemGroup):
     active_model: CModel = bpy.context.scene.model
+
+    morph_count = item_group.morph_component_count
     for part, parent in link.links.items():
         if parent is None:
             continue
-        for obj_num in range(obj_count):
+        for obj_num in range(morph_count):
             part_name = active_model.morph_comp[obj_num] + part
             parent_name = active_model.morph_comp[obj_num] + parent
             if part_name in bpy.data.objects and parent_name in bpy.data.objects:
@@ -874,11 +875,12 @@ def collect_links(collection_name="base"):
     for obj in collection.objects:
         if obj.type != 'MESH':
             continue
-        lnk.add(obj.name, obj.parent.name if obj.parent is not None else None)
+        parent = None if obj.parent is None else obj.parent.name
+        lnk.links[obj.name] = parent
 
-    lnk_ordered: dict[str, str] = dict()
-    parts_ordered(lnk.links, lnk_ordered, lnk.root)
-    lnk.links = lnk_ordered
+    # lnk_ordered: dict[str, str] = dict()
+    # parts_ordered(lnk.links, lnk_ordered, lnk.root)
+    # lnk.links = lnk_ordered
     return lnk
 
 
