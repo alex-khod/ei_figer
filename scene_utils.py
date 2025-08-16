@@ -553,6 +553,8 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
         # mesh.from_pydata(figure.verts[i], [], vertex_indices)
         mesh.uv_layers.new(name=bpy.context.scene.model.name)
         mesh.uv_layers[0].data.foreach_set('uv', uvs_flat)
+        # custom prop
+        base_obj.imported_item_group = item_group.type
         mesh.update()
 
 
@@ -578,6 +580,8 @@ def create_links_2(link: CLink, obj_count=1):
             parent_name = active_model.morph_comp[obj_num] + parent
             if part_name in bpy.data.objects and parent_name in bpy.data.objects:
                 bpy.data.objects[part_name].parent = bpy.data.objects[parent_name]
+                # custom prop
+                bpy.data.objects[part_name].imported_parent = parent_name
 
     return 0
 

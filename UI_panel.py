@@ -23,6 +23,21 @@ from bpy.app import translations
 _ = translations.pgettext
 
 
+class EVIL_ISLANDS_PROPS(bpy.types.Panel):
+    bl_label = "Evil Islands props"
+    bl_idname = "EVIL_ISLANDS_PROPS"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+
+        layout.prop(obj, "imported_parent")
+        layout.prop(obj, "imported_item_group")
+
+
 class LIST_RES_MODELS(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
@@ -306,6 +321,7 @@ def outliner_mt_object(self: bpy.types.OUTLINER_MT_object, context):
 
 def get_classes():
     return (
+        EVIL_ISLANDS_PROPS,
         LIST_RES_MODELS,
         LIST_RES_ANIMATIONS,
         IMPORT_EXPORT_PT_PANEL,

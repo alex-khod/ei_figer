@@ -20,24 +20,29 @@ from bpy.utils import register_class, unregister_class
 from .scene_management import CModel
 from .scene_utils import calculate_mesh
 
-# from typing import TYPE_CHECKING
-
 _ = translations.pgettext
 
-
-# todo refactor into groups
-# class MyPropertyGroup(bpy.types.PropertyGroup):
-#     custom_1: props.FloatProperty(name="My Float")
-#     custom_2: props.IntProperty(name="My Int")
-
 class FilenameListItem(bpy.types.PropertyGroup):
-    """Group of properties representing an item in the list."""
-
     filename: bpy.props.StringProperty(
         name="filename")
 
+def register_object_props():
+    bpy.types.Object.imported_parent = bpy.props.StringProperty(
+        name="Imported parent",
+        description="Parent link for object when it was imported",
+    )
+
+    bpy.types.Object.imported_item_group = bpy.props.StringProperty(
+        name="Imported item group",
+        description="Parent link for object when it was imported",
+    )
+
+def unregister_object_props():
+    del bpy.types.Object.imported_parent
+    del bpy.types.Object.imported_item_group
 
 def register_props():
+    register_object_props()
     scene = bpy.types.Scene
 
     register_class(FilenameListItem)
@@ -335,3 +340,4 @@ def unregister_props():
 
     del scene.model
     unregister_class(FilenameListItem)
+    unregister_object_props()
