@@ -448,7 +448,7 @@ class CAutoFillMorph_OP_Operator(bpy.types.Operator):
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
 
-        item = fig_utils.CItemGroupContainer().get_item_group(MODEL().name)
+        item = fig_utils.CItemGroupContainer.get_item_group(MODEL().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
@@ -515,7 +515,7 @@ class CAutoFillMorphNew_OP_Operator(bpy.types.Operator):
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
 
-        item = fig_utils.CItemGroupContainer().get_item_group(MODEL().name)
+        item = fig_utils.CItemGroupContainer.get_item_group(MODEL().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')
@@ -570,7 +570,7 @@ class CAutoFillMorphScaledOnly_OP_Operator(bpy.types.Operator):
             self.report({'ERROR'}, 'Model name is empty')
             return {'CANCELLED'}
 
-        item = fig_utils.CItemGroupContainer().get_item_group(MODEL().name)
+        item = fig_utils.CItemGroupContainer.get_item_group(MODEL().name)
         obj_count = item.morph_component_count
         if obj_count == 1:
             self.report({'INFO'}, 'This object type has only 1 collection \"base\"')

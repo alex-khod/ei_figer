@@ -81,20 +81,19 @@ class CItemGroup:
         self.uv_base = uv_base or UV_BASE_DEFAULT
 
     def __str__(self):
-        return f"{self.__class__} < type: {self.type} mask: {self.mask} uvc: {self.uv_convert_count} uvb: {self.uv_base} >"
+        return f"< CItemGroup type: {self.type} mask: {self.mask} uvc: {self.uv_convert_count} uvb: {self.uv_base} >"
 
 
-ITEM_GROUPS_JABAIS_VOUX = [
+ITEM_GROUPS_COMMON = [
     CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 2, 19, 8, 1),
     CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 1, 18, 8, 1),
     CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1),
     CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1),
-    CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1),
-    # CItemGroup('weapons', re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 0, 18, 2, 8),
-    # CItemGroup('weapons left', re.compile(r'(lh3\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0)),
-    # CItemGroup('weapons right', re.compile(r'(\.(pike|sword|dagger|2axe|club|axe|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 0)),
-    # CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0)),
-    # CItemGroup('shield', re.compile(r'lh2\.shield\d+'), 1, 18, 2, 8, uv_base=(0, 0)),
+    CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1)
+]
+
+ITEM_GROUPS_JABAIS_VOUX = [
+    *ITEM_GROUPS_COMMON,
 
     CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 1, 19, 2, 8),
     CItemGroup('archery', re.compile(r'(\.(crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18, 2, 8),
@@ -112,22 +111,13 @@ ITEM_GROUPS_JABAIS_VOUX = [
         r'(\.(pike|dpike|sword|dsword|dagger|club|dclub|axe|daxe|staff|dstaff|crbow|bw\D+)|^crbow|^bw\D+)\d+'), 1, 18,
                2, 8),
     CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0)),
-    # CItemGroup('weapons left', re.compile(r'((lh3.pike|lh3.sword|lh3.dagger|lh3.2axe|lh3.club|lh3.axe|lh3.crbow|bw\D+)|^lh3.crbow|^lh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(1, 1)),
-    # CItemGroup('weapons',   re.compile(r'((rh3.pike|rh3.sword|rh3.dagger|rh3.2axe|rh3.club|rh3.axe|rh3.crbow|rh3.bw\D+)|^rh3.crbow|^rh3.bw\D+)\d+'), 1, 18, 2, 8, uv_base=(0, 1)),
-    # CItemGroup('helms', re.compile(r'hd\.armor\d+'), 1, 19, 2, 8, uv_base=(0, 0)),
-    # CItemGroup('shield', re.compile(r'lh2.shield\d+'), 1, 18, 2, 8, uv_base=(1, 0)),
-
     CItemGroup('armor', re.compile(r'\.armor\d+'), 0, 19, 1, 8),
     CItemGroup('unit', re.compile(r'un(an|mo|hu|or|sk).+'), 0, 19, 1, 8),
     CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8)  # LAST
 ]
 
 ITEM_GROUPS_VANILLA = [
-    CItemGroup('quest, quick, material', re.compile(r'init(li)?(qu|qi|tr|mt)[0-9]+'), 2, 19, 8, 1),
-    CItemGroup('treasure/loot', re.compile(r'inittr[0-9]+'), 1, 18, 8, 1),
-    CItemGroup('shop weapons/armors', re.compile(r'init(we|ar)[a-zA-Z]+[0-9]+'), 1, 18, 8, 1),
-    CItemGroup('interactive game objects', re.compile(r'ingm[0-9]+'), 0, 22, 8, 1),
-    CItemGroup('faces', re.compile(r'infa[0-9]+'), 0, 22, 8, 1),
+    *ITEM_GROUPS_COMMON,
     CItemGroup('helms', re.compile(r'hd\.armor\d+'), 0, 19, 2, 8),
     CItemGroup('arrows', re.compile(r'quiver|arrow(s|00)'), 0, 19, 2, 8),
     CItemGroup('weapons',
@@ -153,7 +143,8 @@ class CItemGroupContainer:
     def is_individual_group(cls, mesh_name):
         return mesh_name in INDIVIDUAL_GROUPS
 
-    def get_item_group(self, obj_name: str):
+    @classmethod
+    def get_item_group(cls, obj_name: str):
         set_key = bpy.context.scene.item_container_set
         item_type_set = ITEM_SET_CHOICES.get(set_key) or ITEM_GROUPS_VANILLA
 
@@ -162,13 +153,12 @@ class CItemGroupContainer:
                 print("FOUND", obj_name)
                 print(item)
                 return item
-        print("NOT FOUND", obj_name)
-        # assert!!!!
+        assert False
         return None
 
 
 def get_uv_params(name: str):
-    group = CItemGroupContainer().get_item_group(name)
+    group = CItemGroupContainer.get_item_group(name)
     return group.uv_convert_count, group.uv_base
 
 

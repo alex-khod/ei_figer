@@ -68,13 +68,14 @@ class CFigureHeader:
             setattr(self, key, value)
 
     def __str__(self):
-        parts = ["<HEADER>: "]
+        parts = []
         fields = self.get_member_names()
         for field in fields:
             value = self[field]
             parts.append("%s: %s" % (field, value))
-        parts.insert(6, '\n===>')
+        parts.insert(4, '\n===>')
         text = ' - '.join(parts)
+        text = '<HEADER: %s >' % text
         return text
 
 

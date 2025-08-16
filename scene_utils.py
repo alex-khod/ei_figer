@@ -119,11 +119,6 @@ def read_figure(fig_res: ResFile, fig_name: str):
         fig = CFigure()
         err += fig.read_fig(fig_name, data)
         active_model.mesh_list.append(fig)
-        # bon = CBone()
-        # err += bon.read_bonvec(fig_name, [1,1,1])
-        # active_model.pos_list.append(bon)
-        # bpy.context.scene.cursor.location = (1,1,1)
-        # bpy.context.scene.tool_settings.transform_pivot_point
     return err
 
 
@@ -244,7 +239,7 @@ def create_model_meshes(links: CLink, include_meshes=None):
     if not include_meshes:
         clear_morph_collections(start_index=0)
     bpy.context.window_manager.progress_update(30)
-    container = CItemGroupContainer()
+    container = CItemGroupContainer
     item_group = container.get_item_group(active_model.name)
     ensure_morph_collections()
 
@@ -317,7 +312,7 @@ def export_model(context, res_path, model_name, include_meshes=None):
     #     with open(backup_path, "rb") as src:
     #         dst.write(src.read())
 
-    obj_count = CItemGroupContainer().get_item_group(MODEL().name).morph_component_count
+    obj_count = CItemGroupContainer.get_item_group(MODEL().name).morph_component_count
     if obj_count == 1:  # save lnk,fig,bon into res (without model resfile)
         with ResFile(res_path, 'a') as res:
             with res.open(active_model.name + '.lnk', 'w') as file:
@@ -516,8 +511,7 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
 
     n_indices = figure.header[3] - figure.header[3] % 3
 
-    print('head', figure.header)
-    print('head', figure.header[3])
+    print(figure.header)
 
     indexes = figure.indicies[:n_indices]
     n_tris = n_indices // 3
@@ -781,8 +775,8 @@ def check_morph_items(base_collection, morph_collection: bpy.types.Collection, m
 
 
 def is_model_correct(model_name):
-    obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
-    print(obj_count)
+    # obj_count = CItemGroupContainer.get_item_group(model_name).morph_component_count
+    # print(obj_count)
     collections = bpy.context.scene.collection.children
     if len(collections) < 0:
         print('scene empty')
@@ -807,7 +801,7 @@ def is_model_correct(model_name):
     if bad_objects and not bpy.context.scene.is_ignore_without_morphs:
         return False
 
-    bEtherlord = bpy.context.scene.ether
+    # bEtherlord = bpy.context.scene.ether
 
     root_list = []
     base_coll = get_collection()
@@ -886,7 +880,7 @@ def collect_links(collection_name="base"):
 
 def collect_pos(objects, model_name):
     err = 0
-    obj_count = CItemGroupContainer().get_item_group(model_name).morph_component_count
+    obj_count = CItemGroupContainer.get_item_group(model_name).morph_component_count
     for obj in objects:
         bone = CBone()
         for i in range(obj_count):
@@ -943,12 +937,12 @@ class ModelExporter:
     def collect_mesh(objects, collect_unique=False):
         # collect object meshes into CFigure
         MODEL().mesh_list = []
-        model_group = CItemGroupContainer().get_item_group(MODEL().name)
+        model_group = CItemGroupContainer.get_item_group(MODEL().name)
         morph_count = model_group.morph_component_count
         len_objects = len(objects)
         for n_obj, obj in enumerate(objects):
             figure = CFigure()
-            mesh_group = CItemGroupContainer().get_item_group(obj.name)
+            mesh_group = CItemGroupContainer.get_item_group(obj.name)
             export_group = mesh_group if CItemGroupContainer.is_individual_group(mesh_group.type) else model_group
 
             figure.header[7] = export_group.ei_group
