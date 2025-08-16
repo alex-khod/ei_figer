@@ -51,7 +51,7 @@ class CAnimations:
         return None
 
 
-class CModel():
+class CModel:
     morph_names = [
         'base',  # 0
         'str',  # 1

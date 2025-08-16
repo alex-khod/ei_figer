@@ -240,14 +240,14 @@ def create_model_meshes(links: CLink, include_meshes=None):
         clear_morph_collections(start_index=0)
     bpy.context.window_manager.progress_update(30)
     container = CItemGroupContainer
-    item_group = container.get_item_group(active_model.name)
+    model_group = container.get_item_group(active_model.name)
     ensure_morph_collections()
 
     len_meshes = len(active_model.mesh_list)
     for i, fig in enumerate(active_model.mesh_list):
         bpy.context.window_manager.progress_update(30 + (i / len_meshes * 50))
-        create_mesh_2(fig, item_group)
-    create_links_2(links, item_group)
+        create_mesh_2(fig, model_group)
+    create_links_2(links, model_group)
     for bone in active_model.pos_list:
         morph_count = container.get_item_group(bone.name).morph_component_count
         set_pos_2(bone, morph_count)
@@ -298,9 +298,10 @@ def export_model(context, res_path, model_name, include_meshes=None):
         return filter_
 
     base_collection = get_collection("base")
-    without_morphs = get_base_members_without_morphs()
-    bases_without_morphs = set(without_morphs.keys())
-    filter_ = filter_export(include_meshes, exclude_meshes=bases_without_morphs)
+    obj_count = CItemGroupContainer.get_item_group(MODEL().name).morph_component_count
+    is_fig1 = obj_count == 1
+    without_morphs = None if is_fig1 else set(get_base_members_without_morphs())
+    filter_ = filter_export(include_meshes, exclude_meshes=without_morphs)
     export_objects = list(filter(filter_, base_collection.objects))
 
     collect_pos(export_objects, model_name)
@@ -311,8 +312,6 @@ def export_model(context, res_path, model_name, include_meshes=None):
     # with open(res_path, "wb") as dst:
     #     with open(backup_path, "rb") as src:
     #         dst.write(src.read())
-
-    obj_count = CItemGroupContainer.get_item_group(MODEL().name).morph_component_count
     if obj_count == 1:  # save lnk,fig,bon into res (without model resfile)
         with ResFile(res_path, 'a') as res:
             with res.open(active_model.name + '.lnk', 'w') as file:
@@ -505,14 +504,13 @@ def tris_mesh_from_pydata(mesh: bpy.types.Mesh, vertices: np.array, triangles: n
     #     )
 
 
-def create_mesh_2(figure: CFigure, item_group: CItemGroup):
+def create_mesh_2(figure: CFigure, model_group: CItemGroup):
     # create mesh, replacing old in collection or renaming same-named mesh elsewhere
     active_model: CModel = bpy.context.scene.model
 
     n_indices = figure.header[3] - figure.header[3] % 3
 
     print(figure.header)
-
     indexes = figure.indicies[:n_indices]
     n_tris = n_indices // 3
     component_indexes = indexes
@@ -521,9 +519,8 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
     vertex_indices = indexed_components[:, 0]
     vertex_indices = vertex_indices.reshape((n_tris, 3))
 
-    is_etherlord = bpy.context.scene.is_etherlord
-    morph_count = figure.get_morph_count(figure.signature, is_etherlord)
-
+    morph_count = 6 if figure.is_old_fig6(figure.signature) else model_group.morph_component_count
+    # is_etherlord = bpy.context.scene.is_etherlord
     print('create (n=%d) meshes for %s' % (morph_count, figure.name))
 
     # mesh_uvs = np.array(figure.t_coords)
@@ -553,7 +550,7 @@ def create_mesh_2(figure: CFigure, item_group: CItemGroup):
         mesh.uv_layers.new(name=bpy.context.scene.model.name)
         mesh.uv_layers[0].data.foreach_set('uv', uvs_flat)
         # custom prop
-        base_obj.imported_item_group = item_group.type
+        base_obj.imported_item_group = model_group.type
         mesh.update()
 
 
@@ -572,18 +569,18 @@ def set_pos_2(bone: CBone, morph_count):
 def create_links_2(link: CLink, item_group: CItemGroup):
     active_model: CModel = bpy.context.scene.model
 
-    morph_count = item_group.morph_component_count
     for part, parent in link.links.items():
         if parent is None:
             continue
-        for obj_num in range(morph_count):
-            part_name = active_model.morph_comp[obj_num] + part
-            parent_name = active_model.morph_comp[obj_num] + parent
-            if part_name in bpy.data.objects and parent_name in bpy.data.objects:
-                bpy.data.objects[part_name].parent = bpy.data.objects[parent_name]
+        # todo fix to real morph count...
+        # todo warn missing links
+        for obj_num in range(8):
+            morph_part = active_model.morph_comp[obj_num] + part
+            morph_parent = active_model.morph_comp[obj_num] + parent
+            if morph_part in bpy.data.objects and morph_parent in bpy.data.objects:
+                bpy.data.objects[morph_part].parent = bpy.data.objects[morph_parent]
                 # custom prop
-                bpy.data.objects[part_name].imported_parent = parent_name
-
+                bpy.data.objects[morph_part].imported_parent = morph_parent
     return 0
 
 

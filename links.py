@@ -30,16 +30,20 @@ class CLink:
 
     def read_lnk(self, raw_data: bytearray):
         parser = CByteReader(raw_data)
-        link_number = parser.read('i')
-        for _ in range(link_number):
-            part_len = parser.read('i')
-            part = parser.read(part_len * 's').decode().rstrip('\x00')
+
+        def read_fixed_string():
             part_len = parser.read('i')
             if part_len == 0:
-                self.links[part] = None
-            else:
-                parent = parser.read(part_len * 's').decode().rstrip('\x00')
-                self.links[part] = parent
+                return None
+            part = parser.read(part_len * 's').decode().rstrip('\x00')
+            return part
+
+        link_count = parser.read('i')
+        for _ in range(link_count):
+            parent = read_fixed_string()
+            child = read_fixed_string()
+            self.links[parent] = child
+        print(self.links)
         if parser.is_EOF():
             # print('EOF reached')
             return 0
