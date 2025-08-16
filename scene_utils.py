@@ -944,21 +944,17 @@ class ModelExporter:
         # collect object meshes into CFigure
         MODEL().mesh_list = []
         model_group = CItemGroupContainer().get_item_group(MODEL().name)
-        obj_count = model_group.morph_component_count
-        individual_group = ['helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2',
-                            'weapons left',
-                            'weapons', 'armr', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
-
+        morph_count = model_group.morph_component_count
         len_objects = len(objects)
         for n_obj, obj in enumerate(objects):
             figure = CFigure()
             mesh_group = CItemGroupContainer().get_item_group(obj.name)
-            export_group = mesh_group if mesh_group.type in individual_group else model_group
+            export_group = mesh_group if CItemGroupContainer.is_individual_group(mesh_group.type) else model_group
 
             figure.header[7] = export_group.ei_group
             figure.header[8] = export_group.t_number
             bpy.context.window_manager.progress_update(n_obj / len_objects * 99)
-            for i in range(obj_count):
+            for i in range(morph_count):
                 # TODO: if object has no this morph comp, use previous components (end-point: base)
                 morph_coll = bpy.data.collections.get(MODEL().morph_collection[i])
                 morph_mesh: bpy.types.Mesh = morph_coll.objects[MODEL().morph_comp[i] + obj.name].data
@@ -967,7 +963,7 @@ class ModelExporter:
                 morph_mesh.vertices.foreach_get('co', vertices)
                 vertices.shape = (n_vertex, 3)
                 morph_components = len(vertices)
-                ModelExporter.calculate_figure_bounds_np(figure, vertices, mesh_group)
+                ModelExporter.calculate_figure_bounds_np(figure, vertices, export_group)
                 vertices_aligned_4 = ModelExporter.align_length_by_4_np(vertices)
                 figure.verts[i] = vertices_aligned_4
                 if i > 0:
@@ -987,9 +983,9 @@ class ModelExporter:
                 figure.normals = normals_aligned_4
                 figure.header[5] = morph_components
                 figure.generate_m_c()
-                ModelExporter.collect_base_mesh_np(figure, morph_mesh, mesh_group, collect_unique)
+                ModelExporter.collect_base_mesh_np(figure, morph_mesh, export_group, collect_unique)
             figure.name = obj.name
-            if obj_count == 1:
+            if morph_count == 1:
                 figure.fill_vertices()
                 figure.fill_bounding_volume()
 

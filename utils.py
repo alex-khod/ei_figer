@@ -138,12 +138,20 @@ ITEM_GROUPS_VANILLA = [
     CItemGroup('world objects', re.compile(r'.+'), 0, 18, 8, 8)  # LAST
 ]
 
+INDIVIDUAL_GROUPS = [
+    'helms', 'second layer', 'arrows', 'shield', 'exshield', 'archery', 'archery2',
+    'weapons left', 'weapons', 'armor', 'staffleft', 'stafflefttwo', 'staffright', 'staffrighttwo']
+
 ITEM_SET_CHOICES = {"VANILLA": ITEM_GROUPS_VANILLA, "JABAIS_VOUX": ITEM_GROUPS_JABAIS_VOUX}
 
 
 class CItemGroupContainer:
     def __init__(self):
         pass
+
+    @classmethod
+    def is_individual_group(cls, mesh_name):
+        return mesh_name in INDIVIDUAL_GROUPS
 
     def get_item_group(self, obj_name: str):
         set_key = bpy.context.scene.item_container_set
