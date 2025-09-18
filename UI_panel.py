@@ -112,7 +112,7 @@ class IMPORT_EXPORT_PT_PANEL(bpy.types.Panel):
         # (scene.figmodel_name, mesh_mask)
         row = layout.split()
         row.prop(scene, 'auto_fix')
-        row.prop(scene, 'ether')
+        row.prop(scene, 'is_etherlord')
         row.prop(scene, 'is_export_unique', text="compact")
         layout.prop(scene, 'is_ignore_without_morphs')
         row = layout.row()
