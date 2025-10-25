@@ -36,7 +36,7 @@ from .properties import register_props, unregister_props
 bl_info = {
     'name': 'EI figer',
     'author': 'Konstvest/LostSoul/Asbestos',
-    'version': (6, 6),
+    'version': (6, 7),
     'blender': (3, 1, 0),
     'location': '',
     'description': 'Addon for import/export models and animations from Evil Islands game to Blender',
